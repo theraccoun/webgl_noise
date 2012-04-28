@@ -1,0 +1,470 @@
+<html>
+
+<head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="webgl-utils.js"></script>
+<script type="text/javascript" src="create_shape_buffers.js"></script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform sampler2D uSampler;
+
+    varying vec2 vTexCoord;
+
+    void main(void) {
+    vec4 textureColor = texture2D(uSampler, vec2(vTexCoord.s, vTexCoord.t));
+    gl_FragColor = textureColor;
+    }
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    varying vec2 vTexCoord;
+
+    void main(void) {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTexCoord = aTextureCoord;
+    }
+</script>
+
+<script id="noiseShader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 texCoord;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    varying vec2 vUv;
+
+    void main(void) {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vUv = texCoord;
+    }
+</script>
+
+<script id="noiseShader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform float time;
+    varying vec2 vUv;
+
+    vec4 permute( vec4 x ) {
+
+    return mod( ( ( x * 34.0 ) + 1.0 ) * x, 289.0 );
+
+    }
+
+    vec4 taylorInvSqrt( vec4 r ) {
+
+    return 1.79284291400159 - 0.85373472095314 * r;
+
+    }
+
+    float snoise( vec3 v ) {
+
+    const vec2 C = vec2( 1.0 / 6.0, 1.0 / 3.0 );
+    const vec4 D = vec4( 0.0, 0.5, 1.0, 2.0 );
+
+    // First corner
+
+    vec3 i  = floor( v + dot( v, C.yyy ) );
+    vec3 x0 = v - i + dot( i, C.xxx );
+
+    // Other corners
+
+    vec3 g = step( x0.yzx, x0.xyz );
+    vec3 l = 1.0 - g;
+    vec3 i1 = min( g.xyz, l.zxy );
+    vec3 i2 = max( g.xyz, l.zxy );
+
+    vec3 x1 = x0 - i1 + 1.0 * C.xxx;
+    vec3 x2 = x0 - i2 + 2.0 * C.xxx;
+    vec3 x3 = x0 - 1. + 3.0 * C.xxx;
+
+    // Permutations
+
+    i = mod( i, 289.0 );
+    vec4 p = permute( permute( permute(
+    i.z + vec4( 0.0, i1.z, i2.z, 1.0 ) )
+    + i.y + vec4( 0.0, i1.y, i2.y, 1.0 ) )
+    + i.x + vec4( 0.0, i1.x, i2.x, 1.0 ) );
+
+    // Gradients
+    // ( N*N points uniformly over a square, mapped onto an octahedron.)
+
+    float n_ = 1.0 / 7.0; // N=7
+
+    vec3 ns = n_ * D.wyz - D.xzx;
+
+    vec4 j = p - 49.0 * floor( p * ns.z *ns.z );  //  mod(p,N*N)
+
+    vec4 x_ = floor( j * ns.z );
+    vec4 y_ = floor( j - 7.0 * x_ );    // mod(j,N)
+
+    vec4 x = x_ *ns.x + ns.yyyy;
+    vec4 y = y_ *ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs( x ) - abs( y );
+
+    vec4 b0 = vec4( x.xy, y.xy );
+    vec4 b1 = vec4( x.zw, y.zw );
+
+
+    vec4 s0 = floor( b0 ) * 2.0 + 1.0;
+    vec4 s1 = floor( b1 ) * 2.0 + 1.0;
+    vec4 sh = -step( h, vec4( 0.0 ) );
+
+    vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+    vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+
+    vec3 p0 = vec3( a0.xy, h.x );
+    vec3 p1 = vec3( a0.zw, h.y );
+    vec3 p2 = vec3( a1.xy, h.z );
+    vec3 p3 = vec3( a1.zw, h.w );
+
+    // Normalise gradients
+
+    vec4 norm = taylorInvSqrt( vec4( dot( p0, p0 ), dot( p1, p1 ), dot( p2, p2 ), dot( p3, p3 ) ) );
+    p0 *= norm.x;
+    p1 *= norm.y;
+    p2 *= norm.z;
+    p3 *= norm.w;
+
+    // Mix final noise value
+
+    vec4 m = max( 0.6 - vec4( dot( x0, x0 ), dot( x1, x1 ), dot( x2, x2 ), dot( x3, x3 ) ), 0.0 );
+    m = m * m;
+    return 42.0 * dot( m*m, vec4( dot( p0, x0 ), dot( p1, x1 ),
+    dot( p2, x2 ), dot( p3, x3 ) ) );
+
+    }
+
+    float surface( vec3 coord ) {
+
+    float n = 0.0;
+
+    n += 0.3    * abs( snoise( coord * 5.0 ) );
+    //n += 0.3    * abs( snoise( coord ) );
+
+    //n += 0.25   * ( snoise( coord * 2.0 ) );
+    //n += 0.125  * abs( snoise( coord * 4.0 ) );
+    n += 0.0625 * abs( snoise( coord * 28.0 ) );
+
+    return n;
+
+    }
+
+    void main( void ) {
+    vec3 coord = vec3( vUv, -time );
+
+    float n = surface( coord );
+
+    gl_FragColor = vec4( vec3( n, n, n ), 1.0 );
+
+    }
+</script>
+
+
+<script type="text/javascript">
+
+var gl;
+function initGL(canvas) {
+    try {
+        gl = canvas.getContext("experimental-webgl");
+        gl.viewportWidth = canvas.width;
+        gl.viewportHeight = canvas.height;
+    } catch (e) {
+    }
+    if (!gl) {
+        alert("Could not initialise WebGL, sorry :-(");
+    }
+}
+
+
+function getShader(gl, id) {
+    var shaderScript = document.getElementById(id);
+    if (!shaderScript) {
+        return null;
+    }
+
+    var str = "";
+    var k = shaderScript.firstChild;
+    while (k) {
+        if (k.nodeType == 3) {
+            str += k.textContent;
+        }
+        k = k.nextSibling;
+    }
+
+    var shader;
+    if (shaderScript.type == "x-shader/x-fragment") {
+        shader = gl.createShader(gl.FRAGMENT_SHADER);
+    } else if (shaderScript.type == "x-shader/x-vertex") {
+        shader = gl.createShader(gl.VERTEX_SHADER);
+    } else {
+        return null;
+    }
+
+    gl.shaderSource(shader, str);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        alert(gl.getShaderInfoLog(shader));
+        return null;
+    }
+
+    return shader;
+}
+
+
+
+var shaderProgram;
+var noiseShaderProgram;
+
+function initShaders() {
+    var fragmentShader = getShader(gl, "shader-fs");
+    var vertexShader = getShader(gl, "shader-vs");
+
+    shaderProgram = gl.createProgram();
+    gl.attachShader(shaderProgram, vertexShader);
+    gl.attachShader(shaderProgram, fragmentShader);
+    gl.linkProgram(shaderProgram);
+
+    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+        alert("Could not initialise shaders");
+    }
+
+    gl.useProgram(shaderProgram);
+
+    shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+    shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "aTextureCoord");
+
+
+    shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+    shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+    shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
+
+    var noiseFragShader = getShader(gl, "noiseShader-fs");
+    var noiseVertShader = getShader(gl, "noiseShader-vs");
+
+    noiseShaderProgram = gl.createProgram();
+    gl.attachShader(noiseShaderProgram, noiseFragShader);
+    gl.attachShader(noiseShaderProgram, noiseVertShader);
+    gl.linkProgram(noiseShaderProgram);
+
+    gl.useProgram(noiseShaderProgram);
+
+    if(!gl.getProgramParameter(noiseShaderProgram, gl.LINK_STATUS)){
+        alert("Could not initialise noise shader");
+    }
+
+    noiseShaderProgram.vertexPositionAttribute = gl.getAttribLocation(noiseShaderProgram, "aVertexPosition");
+    noiseShaderProgram.textureCoordAttribute = gl.getAttribLocation(noiseShaderProgram, "vUv");
+
+    noiseShaderProgram.pMatrixUniform = gl.getUniformLocation(noiseShaderProgram, "uPMatrix");
+    noiseShaderProgram.mvMatrixUniform = gl.getUniformLocation(noiseShaderProgram, "uMVMatrix");
+    noiseShaderProgram.uTime = gl.getUniformLocation(noiseShaderProgram, "time");
+
+    gl.useProgram(null);
+}
+
+
+var mvMatrix = mat4.create();
+var pMatrix = mat4.create();
+
+function setMatrixUniforms(sp) {
+    gl.uniformMatrix4fv(sp.pMatrixUniform, false, pMatrix);
+    gl.uniformMatrix4fv(sp.mvMatrixUniform, false, mvMatrix);
+
+}
+
+
+
+var triangleVertexPositionBuffer;
+
+var squareBuffer;
+
+function initBuffers() {
+
+    triangleVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
+    var vertices = [
+        0.0,  1.0,  0.0,
+        -1.0, -1.0,  0.0,
+        1.0, -1.0,  0.0
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    triangleVertexPositionBuffer.itemSize = 3;
+    triangleVertexPositionBuffer.numItems = 3;
+
+    squareBuffer = createRectangleBuffer();
+}
+
+var rttFrameBuffer;
+var rttTexture;
+
+function initTextureFrameBuffer(){
+
+    rttFrameBuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, rttFrameBuffer);
+    rttFrameBuffer.width = 512;
+    rttFrameBuffer.height = 512;
+
+    rttTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, rttTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, rttFrameBuffer.width, rttFrameBuffer.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+    // Want our frame buffer to still be able to detect depth stuff
+    var renderbuffer = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, renderbuffer);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, rttFrameBuffer.width, rttFrameBuffer.height);
+
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, rttTexture, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderbuffer);
+
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+function drawTriangleTexture(){
+
+    gl.viewport(0, 0, rttFrameBuffer.width, rttFrameBuffer.height);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+
+    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+
+    gl.useProgram(noiseShaderProgram);
+
+    gl.uniform1f(noiseShaderProgram.uTime, 3.0);
+
+    mat4.identity(mvMatrix);
+
+    mat4.translate(mvMatrix, [0.0, 0.0, -1.0]);
+    mat4.scale(mvMatrix, [3.0, 3.0, 3.0]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    setMatrixUniforms(noiseShaderProgram);
+    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+
+    gl.bindTexture(gl.TEXTURE_2D, rttTexture);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
+
+function drawScene() {
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, rttFrameBuffer);
+    drawTriangleTexture();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    mat4.perspective(80, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+
+    gl.useProgram(shaderProgram);
+
+    mat4.identity(mvMatrix);
+
+    mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
+    mat4.scale(mvMatrix, [3.0, 3.0, 3.0]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, rttTexture);
+    gl.uniform1i(shaderProgram.samplerUniform, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    setMatrixUniforms(shaderProgram);
+    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+}
+
+var neheTexture;
+
+function initTexture() {
+    neheTexture = gl.createTexture();
+    neheTexture.image = new Image();
+    neheTexture.image.onload = function () {
+        handleLoadedTexture(neheTexture)
+    }
+
+    neheTexture.image.src = "nehe.gif";
+}
+
+function handleLoadedTexture(texture) {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
+var lastTime = 0;
+var timeNow = 0;
+
+function animate() {
+    timeNow = new Date().getSeconds();
+    timeNow = timeNow % 100;
+}
+
+
+function tick(){
+    requestAnimFrame(tick);
+    drawScene();
+    animate();
+}
+
+function webGLStart() {
+    var canvas = document.getElementById("lesson01-canvas");
+    initGL(canvas);
+    initShaders();
+    initTextureFrameBuffer();
+    initBuffers();
+    initTexture();
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.enable(gl.DEPTH_TEST);
+
+    tick();
+}
+
+
+</script>
+
+
+</head>
+
+
+<body onload="webGLStart();">
+
+<canvas id="lesson01-canvas" style="border: none;" width="500" height="500"></canvas>
+</body>
+
+</html>
