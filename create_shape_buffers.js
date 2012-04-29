@@ -20,7 +20,7 @@ function createRectangleBuffer(){
         -1.0, -1.0,  1.0,
         1.0, -1.0,  1.0,
         1.0,  1.0,  1.0,
-        -1.0,  1.0,  1.0,
+        -1.0,  1.0,  1.0
     ];
 
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
