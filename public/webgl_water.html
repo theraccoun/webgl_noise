@@ -13,13 +13,23 @@
     uniform sampler2D uSampler;
     uniform sampler2D waterSampler;
     uniform vec4 ambientLight;
+    uniform vec3 directLightDir;
 
     varying vec2 vTexCoord;
 
     void main(void) {
-        vec4 textureColor = texture2D(uSampler, vec2(vTexCoord.s, vTexCoord.t));
+        vec4 textureColor = texture2D(uSampler, vTexCoord);
         vec4 oceanColor = texture2D(waterSampler, vTexCoord);
-        gl_FragColor = textureColor + oceanColor;
+        //gl_FragColor = textureColor + ambientLight + oceanColor;
+
+        vec3 norm = texture2D(uSampler, vTexCoord).xyz;
+        float NdotL = max(dot(norm, directLightDir), 0.0);
+
+        //gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        //gl_FragColor = vec4(0.0, 0.0, 1.0 * NdotL, 1.0);
+        //gl_FragColor = vec4(textureColor.r + 0.2, textureColor.g + 0.5, 0.0, 1.0);
+        gl_FragColor = vec4(oceanColor.x * NdotL, oceanColor.y * NdotL, oceanColor.z * NdotL, 1.0);
+       // gl_FragColor = textureColor;
     }
 </script>
 
@@ -35,6 +45,34 @@
     void main(void) {
     gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
     vTexCoord = aTextureCoord;
+    }
+</script>
+
+<script id="basicShader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    void main(void) {
+    gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+    }
+</script>
+
+<script id="basicShader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    varying vec2 vTextureCoord;
+
+
+    void main(void) {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = aTextureCoord;
     }
 </script>
 
@@ -154,17 +192,15 @@
     float n = 0.0;
 
     n += 0.3    * abs( snoise( coord * 5.0 ) );
-    //n += 0.3    * abs( snoise( coord ) );
-
-    //n += 0.25   * ( snoise( coord * 2.0 ) );
-    //n += 0.125  * abs( snoise( coord * 4.0 ) );
     n += 0.0625 * abs( snoise( coord * 28.0 ) );
 
     return n;
 
     }
 
+
     void main( void ) {
+
     vec3 coord = vec3( vUv, -time );
 
     float n = surface( coord );
@@ -179,20 +215,26 @@
 
     varying vec2 texCoord;
 
-    uniform sampler2D noiseWave;
+    uniform sampler2D waveSampler;
+    vec2 sampleSize = vec2(512, 512);
 
     const vec2 size = vec2(2.0, 0.0);
     const ivec3 offset = ivec3(-1, 0, 1);
 
-    vec3 normal( vec2 texCoord){
-        vec4 wave = texture2D(noiseWave, texCoord);
-        float s11 = wave.x;
+    vec4 getNormal( vec2 tex){
+        float curTexel = texture2D(waveSampler, tex).x;
 
-        return vec3(wave.xyz);
+        //Get neighboring texels to compute slope
+        float nearX = texture2D(waveSampler, tex + vec2(1.0/sampleSize.x, 0.0)).x;
+        float nearY = texture2D(waveSampler, tex + vec2(0.0, 1.0/sampleSize.y)).x;
+
+        vec4 normVector = vec4(0.5*normalize( vec3(curTexel - nearX, curTexel - nearY, 0.2)) + 0.5, 1.0);
+
+        return normVector;
     }
 
     void main(void){
-        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        gl_FragColor = getNormal(texCoord);
     }
 
 </script>
@@ -204,11 +246,11 @@
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
 
-    varying vec2 vTexCoord;
+    varying vec2 texCoord;
 
     void main(void) {
     gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
-    vTexCoord = aTextureCoord;
+    texCoord = aTextureCoord;
     }
 </script>
 
@@ -268,8 +310,30 @@ function getShader(gl, id) {
 var shaderProgram;
 var noiseShaderProgram;
 var normalShaderProgram;
+var basicShaderProgram;
 
 function initShaders() {
+    var basicFragmentShader = getShader(gl, "basicShader-fs");
+    var basicVertexShader = getShader(gl, "basicShader-vs");
+
+    basicShaderProgram = gl.createProgram();
+    gl.attachShader(basicShaderProgram, basicFragmentShader);
+    gl.attachShader(basicShaderProgram, basicVertexShader);
+    gl.linkProgram(basicShaderProgram);
+
+    if (!gl.getProgramParameter(basicShaderProgram, gl.LINK_STATUS)) {
+        alert("Could not initialise basicShaderProgram");
+    }
+
+    gl.useProgram(basicShaderProgram);
+
+    basicShaderProgram.vertexPositionAttribute = gl.getAttribLocation(basicShaderProgram, "aVertexPosition");
+    basicShaderProgram.textureCoordAttribute = gl.getAttribLocation(basicShaderProgram, "aTextureCoord");
+
+    basicShaderProgram.pMatrixUniform = gl.getUniformLocation(basicShaderProgram, "uPMatrix");
+    basicShaderProgram.mvMatrixUniform = gl.getUniformLocation(basicShaderProgram, "uMVMatrix");
+    basicShaderProgram.samplerUniform = gl.getUniformLocation(basicShaderProgram, "uSampler");
+
     var fragmentShader = getShader(gl, "shader-fs");
     var vertexShader = getShader(gl, "shader-vs");
 
@@ -293,6 +357,8 @@ function initShaders() {
     shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
     shaderProgram.waterSamplerUniform = gl.getUniformLocation(shaderProgram, "waterSampler");
     shaderProgram.ambientUniform = gl.getUniformLocation(shaderProgram, "ambientLight");
+    shaderProgram.directionalLight = gl.getUniformLocation(shaderProgram, "directLightDir");
+
 
     var noiseFragShader = getShader(gl, "noiseShader-fs");
     var noiseVertShader = getShader(gl, "noiseShader-vs");
@@ -309,7 +375,7 @@ function initShaders() {
     }
 
     noiseShaderProgram.vertexPositionAttribute = gl.getAttribLocation(noiseShaderProgram, "aVertexPosition");
-    noiseShaderProgram.textureCoordAttribute = gl.getAttribLocation(noiseShaderProgram, "vUv");
+    noiseShaderProgram.textureCoordAttribute = gl.getAttribLocation(noiseShaderProgram, "texCoord");
 
     noiseShaderProgram.pMatrixUniform = gl.getUniformLocation(noiseShaderProgram, "uPMatrix");
     noiseShaderProgram.mvMatrixUniform = gl.getUniformLocation(noiseShaderProgram, "uMVMatrix");
@@ -332,8 +398,13 @@ function initShaders() {
     normalShaderProgram.vertexPositionAttribute = gl.getAttribLocation(normalShaderProgram, "aVertexPosition");
     normalShaderProgram.textureCoordAttribute = gl.getAttribLocation(normalShaderProgram, "aTextureCoord");
 
-    noiseShaderProgram.pMatrixUniform = gl.getUniformLocation(noiseShaderProgram, "uPMatrix");
-    noiseShaderProgram.mvMatrixUniform = gl.getUniformLocation(noiseShaderProgram, "uMVMatrix");
+    normalShaderProgram.pMatrixUniform = gl.getUniformLocation(normalShaderProgram, "uPMatrix");
+    normalShaderProgram.mvMatrixUniform = gl.getUniformLocation(normalShaderProgram, "uMVMatrix");
+    normalShaderProgram.uNoiseSampler = gl.getUniformLocation(normalShaderProgram, "waveSampler");
+//
+//    alert(normalShaderProgram.pMatrixUniform);
+//    alert(normalShaderProgram.mvMatrixUniform);
+//    alert(normalShaderProgram.uNoiseSampler);
 
     gl.useProgram(null);
 }
@@ -370,46 +441,49 @@ function initBuffers() {
     squareBuffer = createRectangleBuffer();
 }
 
-var rttFrameBuffer;
-var rttTexture;
+var noiseFBO;
+var normalFBO;
 
-function initTextureFrameBuffer(){
+function initTextureFrameBuffer( width){
 
-    rttFrameBuffer = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, rttFrameBuffer);
-    rttFrameBuffer.width = 512;
-    rttFrameBuffer.height = 512;
+    var fbo = {framebuffer : null , texture : null, size : width};
 
-    rttTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, rttTexture);
+    fbo.framebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.framebuffer);
+    fbo.framebuffer.width = width;
+    fbo.framebuffer.height = width;
+
+    fbo.texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
     gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, rttFrameBuffer.width, rttFrameBuffer.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fbo.framebuffer.width, fbo.framebuffer.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
     // Want our frame buffer to still be able to detect depth stuff
     var renderbuffer = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, renderbuffer);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, rttFrameBuffer.width, rttFrameBuffer.height);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, fbo.framebuffer.width, fbo.framebuffer.height);
 
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, rttTexture, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbo.texture, 0);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderbuffer);
 
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.bindRenderbuffer(gl.RENDERBUFFER, null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    return fbo;
 }
 
 function genFBONoiseMap(){
 
-    gl.viewport(0, 0, rttFrameBuffer.width, rttFrameBuffer.height);
+    gl.viewport(0, 0, 512, 512);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     mat4.identity(pMatrix);
     mat4.ortho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0, pMatrix);
 
     gl.useProgram(noiseShaderProgram);
-
     gl.uniform1f(noiseShaderProgram.uTime, timeNow);
 
     mat4.identity(mvMatrix);
@@ -417,21 +491,59 @@ function genFBONoiseMap(){
     mat4.translate(mvMatrix, [-1.0, -1.0, 0.0]);
     mat4.scale(mvMatrix, [2.0, 2.0, 1.0]);
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+    gl.vertexAttribPointer(noiseShaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(noiseShaderProgram.vertexPositionAttribute);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
-    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+    gl.vertexAttribPointer(noiseShaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(noiseShaderProgram.textureCoordAttribute);
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
     setMatrixUniforms(noiseShaderProgram);
     gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
-    gl.bindTexture(gl.TEXTURE_2D, rttTexture);
+
+    gl.bindTexture(gl.TEXTURE_2D, noiseFBO.texture);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.bindTexture(gl.TEXTURE_2D, null);
 }
+
+function genFBONormalMap(){
+
+    gl.viewport(0, 0, 512, 512);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    mat4.identity(pMatrix);
+    mat4.ortho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0, pMatrix);
+
+    gl.useProgram(normalShaderProgram);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, noiseFBO.texture);
+    gl.uniform1i(normalShaderProgram.uNoiseSampler, 0);
+
+    mat4.identity(mvMatrix);
+
+    mat4.translate(mvMatrix, [-1.0, -1.0, 0.0]);
+    mat4.scale(mvMatrix, [2.0, 2.0, 1.0]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(normalShaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(normalShaderProgram.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(normalShaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(normalShaderProgram.textureCoordAttribute);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    setMatrixUniforms(normalShaderProgram);
+    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+
+    gl.bindTexture(gl.TEXTURE_2D, normalFBO.texture);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
+
 
 var directionalLight = new Object();
 var ambientLight = new Object();
@@ -441,14 +553,19 @@ function setupLighting(){
     directionalLight.direction = [0.0, 10.0, -10.0];
     directionalLight.color = [1.0, 0.0, 0.0];
 
-    ambientLight.color = [0.0, 0.0, 0.5];
-    alert(directionalLight.x);
+    ambientLight.color = [-0.3, -0.3, 0.4, 1.0];
 }
 
 function drawScene() {
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, rttFrameBuffer);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, noiseFBO.framebuffer);
     genFBONoiseMap();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, normalFBO.framebuffer);
+    genFBONormalMap();
+//    var pixelValues = new Uint8Array(4);
+//    gl.readPixels(5, 35, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelValues);
+//    alert(pixelValues[1]);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
@@ -459,7 +576,8 @@ function drawScene() {
 
     gl.useProgram(shaderProgram);
 
-    gl.uniform4f(shaderProgram.ambientUniform, 0.0, 0.0, 1.0, 1.0);
+    gl.uniform4f(shaderProgram.ambientUniform, ambientLight.color[0], ambientLight.color[1], ambientLight.color[2], ambientLight.color[3]);
+    gl.uniform3f(shaderProgram.directionalLight, 0.3, 1.0, 0.0);
 
     mat4.identity(mvMatrix);
 
@@ -474,12 +592,12 @@ function drawScene() {
     gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, rttTexture);
-    gl.uniform1i(shaderProgram.samplerUniform, 0);
     gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, normalFBO.texture);
+    gl.uniform1i(shaderProgram.samplerUniform, 1);
+    gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, neheTexture);
-    gl.uniform1i(shaderProgram.waterSamplerUniform, 1);
+    gl.uniform1i(shaderProgram.waterSamplerUniform, 2);
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
     setMatrixUniforms(shaderProgram);
@@ -495,7 +613,7 @@ function initTexture() {
         handleLoadedTexture(neheTexture)
     }
 
-    neheTexture.image.src = "images/ocean512.png";
+    neheTexture.image.src = "images/wavePorter.jpg";
 }
 
 function handleLoadedTexture(texture) {
@@ -515,7 +633,7 @@ var slowTime = 0;
 function animate() {
 
     timeNow = new Date().getTime() - origTime;
-    timeNow = timeNow/10000;
+    timeNow = timeNow/100000;
 
 //    alert(timeNow);
 
@@ -541,10 +659,11 @@ function webGLStart() {
     var canvas = document.getElementById("lesson01-canvas");
     initGL(canvas);
     initShaders();
-    initTextureFrameBuffer();
+    noiseFBO = initTextureFrameBuffer(512);
+    normalFBO = initTextureFrameBuffer(512);
     initBuffers();
     initTexture();
-//    setupLighting();
+    setupLighting();
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
