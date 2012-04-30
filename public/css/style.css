@@ -1,0 +1,81 @@
+
+body {
+  font-family: "Inconsolata";
+  background-color: #eee;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Maven Pro";
+}
+
+ul {
+  list-style: none;
+}
+
+ul li {
+  margin: 0;
+}
+
+a {
+  color: #000;
+  text-decoration: none;
+}
+
+a:visited {
+  color: #000;
+  text-decoration: none;
+}
+
+.header-spread {
+  position: absolute;
+  width: 100%;
+  background-color: #F2F1E9;
+  border-bottom: thick solid #41434A;
+  height: 70px;
+  box-shadow: 0px 5px 8px rgba(0, 0, 0, 0.50);
+  -moz-box-shadow: 0px 5px 8px rgba(0, 0, 0, 0.50);
+  -webkit-box-shadow: 0px 5px 8px rgba(0, 0, 0, 0.50);
+}
+
+header {
+  margin-top: 15px;
+}
+
+.content-spread {
+  padding-top: 70px;
+}
+
+.content {
+  margin-top: 100px;
+  height: 100%;
+}
+
+.collapsible-header {
+  cursor: pointer;
+  border-bottom: thin solid #41434A;
+}
+
+.collapsible-header h2:before {
+  content: "\2192 \00A0";
+}
+
+.collapsible-header.open h2:before {
+  content: "\2193 \00A0 \0020";
+}
+
+.collapsible-content li {
+  height: 20px;
+  padding: 10px;
+  border-bottom: thin solid #41434A;
+}
+
+.collapsible-content li a {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.collapsible-content li:hover {
+  background-color: #F2F1E9; 
+
+}
