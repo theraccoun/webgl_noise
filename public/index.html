@@ -3,9 +3,9 @@
 <head>
 <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
 
-<script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
-<script type="text/javascript" src="webgl-utils.js"></script>
-<script type="text/javascript" src="create_shape_buffers.js"></script>
+<script type="text/javascript" src="js/glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="js/webgl-utils.js"></script>
+<script type="text/javascript" src="js/create_shape_buffers.js"></script>
 
 <script id="shader-fs" type="x-shader/x-fragment">
     precision mediump float;
@@ -495,7 +495,7 @@ function initTexture() {
         handleLoadedTexture(neheTexture)
     }
 
-    neheTexture.image.src = "ocean512.png";
+    neheTexture.image.src = "images/ocean512.png";
 }
 
 function handleLoadedTexture(texture) {
