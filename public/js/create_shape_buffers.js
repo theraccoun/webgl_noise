@@ -53,7 +53,7 @@ function createRectangleBuffer(){
     return squareBuffer;
 }
 
-function createCubeBuffer(){
+function createCubeBuffer( w){
 
     var cubeBuffer = {
         vertexPositionBuffer : null,
@@ -63,7 +63,7 @@ function createCubeBuffer(){
 
     cubeBuffer.vertexPositionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, cubeBuffer.vertexPositionBuffer);
-    var w = 8000;
+    w = 8000;
     var vertices = [
         // Front face
         -w, -w,  w,
