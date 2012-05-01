@@ -716,7 +716,7 @@ function drawScene() {
     mat3.transpose(normalMatrix);
     gl.uniformMatrix3fv(shaderProgram.nMatrixUniform, false, normalMatrix);
 
-    mat4.translate(mvMatrix, [0.0, -3.0, -5.0]);
+    mat4.translate(mvMatrix, [0.0, -3.0, -10.0]);
     mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
     mat4.scale(mvMatrix, [5.0, 15.0, 1.0]);
 
@@ -744,7 +744,7 @@ function drawScene() {
 
 function drawSphere(){
     gl.useProgram(basicShaderProgram);
-    gl.uniform4f(basicShaderProgram.uColor, 1.0, 0.0, 0.0, 1.0);
+    gl.uniform4f(basicShaderProgram.uColor, 0.5, 0.5, 0.5, 1.0);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, sphereBuffer.vertexPositionBuffer);
     gl.vertexAttribPointer(basicShaderProgram.vertexPositionAttribute, sphereBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
@@ -945,9 +945,9 @@ function webGLStart() {
 <body onload="webGLStart();" style="background: #000;">
   <div id="slider"></div>
   <div id="amount"><h1 style="color: #fff;">50</h1></div>
-  <h1 style="color: #fff;">Penis</h1>
+  <h1 style="color: #fff;">Reflection</h1>
 
-<canvas id="lesson01-canvas" style="border: none;" width="1400" height="900"></canvas>
+<canvas id="lesson01-canvas" style="border: none;" width="1400" height="500"></canvas>
 </body>
 
 </html>
