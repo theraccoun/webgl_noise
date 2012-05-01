@@ -14,23 +14,27 @@
     uniform sampler2D waterSampler;
     uniform vec4 ambientLight;
     uniform vec3 directLightDir;
+    uniform mat3 uNMatrix;
 
     varying vec2 vTexCoord;
+    varying vec3 vPointlightDirection;
 
     void main(void) {
-        vec4 textureColor = texture2D(uSampler, vTexCoord);
+        //vec4 textureColor = texture2D(uSampler, vTexCoord);
         vec4 oceanColor = texture2D(waterSampler, vTexCoord);
         //gl_FragColor = textureColor + ambientLight + oceanColor;
 
-        vec3 norm = texture2D(uSampler, vTexCoord).xyz;
-        float NdotL = max(dot(norm, directLightDir), 0.0);
+        // Get the normal in texture space
+        vec3 normTextSpace = normalize(texture2D(uSampler, vTexCoord).xyz);
+        // Convert normal to eye space
+        vec3 normEyeSpace = uNMatrix * normTextSpace;
+
+        float NdotL = max(dot(normEyeSpace, vPointlightDirection), 0.0);
 
         //gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
         //gl_FragColor = vec4(0.0, 0.0, 1.0 * NdotL, 1.0);
         //gl_FragColor = vec4(textureColor.r + 0.2, textureColor.g + 0.5, 0.0, 1.0);
-        gl_FragColor = vec4(oceanColor.x * NdotL, oceanColor.y * NdotL, oceanColor.z * NdotL, 1.0) + ambientLight;
-
-       // gl_FragColor = textureColor;
+        gl_FragColor = vec4(oceanColor.x * NdotL, oceanColor.y * NdotL, oceanColor.z * NdotL, 1.0);
     }
 </script>
 
@@ -40,11 +44,18 @@
 
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
+    uniform vec3 uPointlightLocation;
 
     varying vec2 vTexCoord;
+    varying vec3 vPointlightDirection;
 
     void main(void) {
+
+    vec4 mvPos = uMVMatrix * vec4(aVertexPosition, 1.0);
+    vPointlightDirection = normalize(uPointlightLocation - mvPos.xyz);
+
     gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+
     vTexCoord = aTextureCoord;
     }
 </script>
@@ -229,7 +240,7 @@
         float nearX = texture2D(waveSampler, tex + vec2(1.0/sampleSize.x, 0.0)).x;
         float nearY = texture2D(waveSampler, tex + vec2(0.0, 1.0/sampleSize.y)).x;
 
-        vec4 normVector = vec4(0.5*normalize( vec3(curTexel - nearX, curTexel - nearY, 0.15)) + 0.5, 1.0);
+        vec4 normVector = vec4(0.5*normalize( vec3(curTexel - nearX, curTexel - nearY, 0.12)) + 0.5, 1.0);
 
         return normVector;
     }
@@ -382,10 +393,12 @@ function initShaders() {
 
     shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
     shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+    shaderProgram.nMatrixUniform = gl.getUniformLocation(shaderProgram, "uNMatrix");
     shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
     shaderProgram.waterSamplerUniform = gl.getUniformLocation(shaderProgram, "waterSampler");
     shaderProgram.ambientUniform = gl.getUniformLocation(shaderProgram, "ambientLight");
     shaderProgram.directionalLight = gl.getUniformLocation(shaderProgram, "directLightDir");
+    shaderProgram.pointLight = gl.getUniformLocation(shaderProgram, "uPointlightLocation");
 
 
     var noiseFragShader = getShader(gl, "noiseShader-fs");
@@ -461,6 +474,8 @@ function initShaders() {
 
 var mvMatrix = mat4.create();
 var pMatrix = mat4.create();
+var normalMatrix = mat3.create();
+
 
 function setMatrixUniforms(sp) {
     gl.uniformMatrix4fv(sp.pMatrixUniform, false, pMatrix);
@@ -598,11 +613,14 @@ function genFBONormalMap(){
 
 var directionalLight = new Object();
 var ambientLight = new Object();
+var pointLight = new Object();
 
 function setupLighting(){
 
-    directionalLight.direction = [0.0, 10.0, -10.0];
+    directionalLight.direction = [0.0, 3.0, 0.0];
     directionalLight.color = [1.0, 0.0, 0.0];
+
+    pointLight.direction = [20.0, 30.0, -45.0];
 
     ambientLight.color = [-0.3, -0.3, 0.2, 1.0];
 }
@@ -654,18 +672,27 @@ function drawScene() {
     mat4.identity(mvMatrix);
     mat4.rotate(mvMatrix, degToRad(-yaw), [0, 1, 0]);
     mat4.translate(mvMatrix, [-xPos, 0, -zPos]);
-    drawSkyBox();
+//    drawSkyBox();
+
 
     gl.useProgram(shaderProgram);
 
     gl.uniform4f(shaderProgram.ambientUniform, ambientLight.color[0], ambientLight.color[1], ambientLight.color[2], ambientLight.color[3]);
-    gl.uniform3f(shaderProgram.directionalLight, 0.3, 1.0, 0.0);
+//    gl.uniform3f(shaderProgram.directionalLight, directionalLight.direction[0], directionalLight.direction[1], directionalLight.direction[2]);
+    gl.uniform3f(shaderProgram.pointLight, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
 
     mat4.identity(mvMatrix);
+
+    mat4.toInverseMat3(mvMatrix, normalMatrix);
+    mat3.transpose(normalMatrix);
+    gl.uniformMatrix3fv(shaderProgram.nMatrixUniform, false, normalMatrix);
 
     mat4.translate(mvMatrix, [0.0, -10.0, -30.0]);
     mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
     mat4.scale(mvMatrix, [30.0, 15.0, 1.0]);
+
+
+
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
     gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
@@ -719,7 +746,10 @@ function UpdateTexture(index, cubeTexture, cubeImage) {
 function LoadCubeImage(index, cubeTexture) {
     var cubeImage = new Image();
     cubeImage.onload = function () { UpdateTexture(index, cubeTexture, cubeImage); }
-    cubeImage.src = "images/skyface" + index + ".jpg";
+
+    cubeImage.src = "images/mars_water.jpg";
+
+
 }
 
 var cubeTexture;
