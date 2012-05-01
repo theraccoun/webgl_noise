@@ -474,6 +474,7 @@ function initShaders() {
 
 var mvMatrix = mat4.create();
 var pMatrix = mat4.create();
+var mvMatrixStack = [];
 var normalMatrix = mat3.create();
 
 
@@ -483,11 +484,24 @@ function setMatrixUniforms(sp) {
 
 }
 
+function mvPushMatrix() {
+    var copy = mat4.create();
+    mat4.set(mvMatrix, copy);
+    mvMatrixStack.push(copy);
+}
+
+function mvPopMatrix() {
+    if (mvMatrixStack.length == 0) {
+        throw "Invalid popMatrix!";
+    }
+    mvMatrix = mvMatrixStack.pop();
+}
 
 
 var triangleVertexPositionBuffer;
 var squareBuffer;
 var skyBoxBuffer;
+var sphereBuffer;
 
 function initDrawingBuffers() {
 
@@ -505,6 +519,8 @@ function initDrawingBuffers() {
     squareBuffer = createRectangleBuffer();
 
     skyBoxBuffer = createCubeBuffer(8000);
+
+    sphereBuffer = createSphereBuffer();
 }
 
 var noiseFBO;
@@ -620,7 +636,7 @@ function setupLighting(){
     directionalLight.direction = [0.0, 3.0, 0.0];
     directionalLight.color = [1.0, 0.0, 0.0];
 
-    pointLight.direction = [20.0, 30.0, -45.0];
+    pointLight.direction = [0, 10.0, 0.0];
 
     ambientLight.color = [-0.3, -0.3, 0.2, 1.0];
 }
@@ -672,7 +688,12 @@ function drawScene() {
     mat4.identity(mvMatrix);
     mat4.rotate(mvMatrix, degToRad(-yaw), [0, 1, 0]);
     mat4.translate(mvMatrix, [-xPos, 0, -zPos]);
-//    drawSkyBox();
+    drawSkyBox();
+
+    mvPushMatrix();
+    mat4.translate(mvMatrix, pointLight.direction);
+    drawSphere();
+    mvPopMatrix();
 
 
     gl.useProgram(shaderProgram);
@@ -681,15 +702,17 @@ function drawScene() {
 //    gl.uniform3f(shaderProgram.directionalLight, directionalLight.direction[0], directionalLight.direction[1], directionalLight.direction[2]);
     gl.uniform3f(shaderProgram.pointLight, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
 
-    mat4.identity(mvMatrix);
+
+
+//    mat4.identity(mvMatrix);
 
     mat4.toInverseMat3(mvMatrix, normalMatrix);
     mat3.transpose(normalMatrix);
     gl.uniformMatrix3fv(shaderProgram.nMatrixUniform, false, normalMatrix);
 
-    mat4.translate(mvMatrix, [0.0, -10.0, -30.0]);
+    mat4.translate(mvMatrix, [0.0, -10.0, -20.0]);
     mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
-    mat4.scale(mvMatrix, [30.0, 15.0, 1.0]);
+    mat4.scale(mvMatrix, [5.0, 15.0, 1.0]);
 
 
 
@@ -711,6 +734,20 @@ function drawScene() {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
     setMatrixUniforms(shaderProgram);
     gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+}
+
+function drawSphere(){
+    gl.useProgram(basicShaderProgram);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, sphereBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(basicShaderProgram.vertexPositionAttribute, sphereBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(basicShaderProgram.samplerUniform);
+
+    gl.disableVertexAttribArray(basicShaderProgram.textureCoordAttribute);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereBuffer.indexBuffer);
+    setMatrixUniforms(basicShaderProgram);
+    gl.drawElements(gl.TRIANGLES, sphereBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
 var waterTextureImg;
@@ -888,7 +925,7 @@ function webGLStart() {
 
 <body onload="webGLStart();" style="background: #000;">
 
-<canvas id="lesson01-canvas" style="border: none;" width="1400" height="700"></canvas>
+<canvas id="lesson01-canvas" style="border: none;" width="1400" height="900"></canvas>
 </body>
 
 </html>
