@@ -70,9 +70,10 @@
     varying vec2 vTextureCoord;
 
     uniform sampler2D uSampler;
+    uniform vec4 uColor;
 
     void main(void) {
-    gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+    gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t)) + uColor;
     }
 </script>
 
@@ -376,6 +377,7 @@ function initShaders() {
     basicShaderProgram.pMatrixUniform = gl.getUniformLocation(basicShaderProgram, "uPMatrix");
     basicShaderProgram.mvMatrixUniform = gl.getUniformLocation(basicShaderProgram, "uMVMatrix");
     basicShaderProgram.samplerUniform = gl.getUniformLocation(basicShaderProgram, "uSampler");
+    basicShaderProgram.uColor = gl.getUniformLocation(basicShaderProgram, "uColor");
 
     var fragmentShader = getShader(gl, "shader-fs");
     var vertexShader = getShader(gl, "shader-vs");
@@ -524,7 +526,7 @@ function initDrawingBuffers() {
 
     skyBoxBuffer = createCubeBuffer(8000);
 
-    sphereBuffer = createSphereBuffer();
+    sphereBuffer = createSphereBuffer(0.5);
 }
 
 var noiseFBO;
@@ -640,7 +642,7 @@ function setupLighting(){
     directionalLight.direction = [0.0, 3.0, 0.0];
     directionalLight.color = [1.0, 0.0, 0.0];
 
-    pointLight.direction = [0, 10.0, 0.0];
+    pointLight.direction = [10, 10.0, -20.0];
 
     ambientLight.color = [-0.3, -0.3, 0.2, 1.0];
 }
@@ -692,7 +694,7 @@ function drawScene() {
     mat4.identity(mvMatrix);
     mat4.rotate(mvMatrix, degToRad(-yaw), [0, 1, 0]);
     mat4.translate(mvMatrix, [-xPos, 0, -zPos]);
-    drawSkyBox();
+//    drawSkyBox();
 
     mvPushMatrix();
     mat4.translate(mvMatrix, pointLight.direction);
@@ -714,7 +716,7 @@ function drawScene() {
     mat3.transpose(normalMatrix);
     gl.uniformMatrix3fv(shaderProgram.nMatrixUniform, false, normalMatrix);
 
-    mat4.translate(mvMatrix, [0.0, -10.0, -20.0]);
+    mat4.translate(mvMatrix, [0.0, -3.0, -5.0]);
     mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
     mat4.scale(mvMatrix, [5.0, 15.0, 1.0]);
 
@@ -742,6 +744,7 @@ function drawScene() {
 
 function drawSphere(){
     gl.useProgram(basicShaderProgram);
+    gl.uniform4f(basicShaderProgram.uColor, 1.0, 0.0, 0.0, 1.0);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, sphereBuffer.vertexPositionBuffer);
     gl.vertexAttribPointer(basicShaderProgram.vertexPositionAttribute, sphereBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);

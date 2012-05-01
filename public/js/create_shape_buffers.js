@@ -165,7 +165,7 @@ function createCubeBuffer( w){
     return cubeBuffer;
 }
 
-function createSphereBuffer(){
+function createSphereBuffer( radius){
 
     var sphereBuffer = {
         vertexPositionBuffer : null,
@@ -176,7 +176,6 @@ function createSphereBuffer(){
 
     var latitudeBands = 30;
     var longitudeBands = 30;
-    var radius = 2;
 
     var vertexPositionData = [];
     var normalData = [];
