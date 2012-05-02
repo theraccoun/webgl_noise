@@ -11,6 +11,7 @@
 <script type="text/javascript" src="js/jquery-ui-1.8.20.custom.min.js"></script>
 
 
+
 <script id="shader-fs" type="x-shader/x-fragment">
     precision mediump float;
 
@@ -24,21 +25,22 @@
     varying vec3 vPointlightDirection;
 
     void main(void) {
-        //vec4 textureColor = texture2D(uSampler, vTexCoord);
-        vec4 oceanColor = texture2D(waterSampler, vTexCoord);
-        //gl_FragColor = textureColor + ambientLight + oceanColor;
+        float v = texture2D(uSampler, vTexCoord).x;
+        vec3 color = texture2D( waterSampler, vec2(v, 0.0)).xyz;
+        //vec4 oceanColor = texture2D(waterSampler, vTexCoord);
+        gl_FragColor = vec4(color, 1.0);
 
         // Get the normal in texture space
         vec3 normTextSpace = normalize(texture2D(uSampler, vTexCoord).xyz);
         // Convert normal to eye space
         vec3 normEyeSpace = uNMatrix * normTextSpace;
 
-        float NdotL = max(dot(normEyeSpace, vPointlightDirection), 0.0);
+        //float NdotL = normalize(max(dot(normEyeSpace, vPointlightDirection), 0.0));
 
         //gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
         //gl_FragColor = vec4(0.0, 0.0, 1.0 * NdotL, 1.0);
         //gl_FragColor = vec4(textureColor.r + 0.2, textureColor.g + 0.5, 0.0, 1.0);
-        gl_FragColor = vec4(oceanColor.x * NdotL, oceanColor.y * NdotL, oceanColor.z * NdotL, 1.0);
+        //gl_FragColor = vec4(oceanColor.x * NdotL, oceanColor.y * NdotL, oceanColor.z * NdotL, 1.0) ;
     }
 </script>
 
@@ -86,10 +88,44 @@
 
     varying vec2 vTextureCoord;
 
-
     void main(void) {
     gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
     vTextureCoord = aTextureCoord;
+    }
+</script>
+
+<script id="rippleShader-fs" type="x-shader/x-fragment">
+    precision highp float;
+
+    uniform float time;
+    uniform vec2 resolution;
+    uniform sampler2D tex;
+
+    varying vec2 vTexCoord;
+
+    void main(void) {
+    vec2 cPos = vTexCoord*2.0 - 1.0;
+    float cLength = length(cPos);
+
+    vec2 uv = vTexCoord +(cPos/cLength)*cos(cLength*12.0-time*4.0)*0.03;
+    vec3 col = texture2D(tex,uv).xyz;
+
+    gl_FragColor = vec4(col, 1.0);
+    }
+</script>
+
+<script id="rippleShader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    varying vec2 vTexCoord;
+
+    void main(void) {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTexCoord = aTextureCoord;
     }
 </script>
 
@@ -236,16 +272,21 @@
     vec2 sampleSize = vec2(512, 512);
 
     const vec2 size = vec2(2.0, 0.0);
-    const ivec3 offset = ivec3(-1, 0, 1);
 
     vec4 getNormal( vec2 tex){
         float curTexel = texture2D(waveSampler, tex).x;
 
         //Get neighboring texels to compute slope
-        float nearX = texture2D(waveSampler, tex + vec2(1.0/sampleSize.x, 0.0)).x;
-        float nearY = texture2D(waveSampler, tex + vec2(0.0, 1.0/sampleSize.y)).x;
+        float rightX = texture2D(waveSampler, tex + vec2(1.0/sampleSize.x, 0.0)).x;
+        float leftX = texture2D(waveSampler, tex - vec2(1.0/sampleSize.x, 0.0)).x;
+        float aboveY = texture2D(waveSampler, tex + vec2(0.0, 1.0/sampleSize.y)).x;
+        float belowY = texture2D(waveSampler, tex - vec2(0.0, 1.0/sampleSize.y)).x;
 
-        vec4 normVector = vec4(0.5*normalize( vec3(curTexel - nearX, curTexel - nearY, 0.12)) + 0.5, 1.0);
+        vec3 va = normalize(vec3(size.xy, rightX - leftX));
+        vec3 vb = normalize(vec3(size.xy, aboveY - belowY));
+
+        //vec4 bumpVector = vec4( vec3(0.5*normalize(cross(va, vb))+0.5), curTexel);
+        vec4 normVector = vec4(0.5*normalize( vec3(curTexel - rightX, curTexel - aboveY, 0.06)) + 0.5, 1.0);
 
         return normVector;
     }
@@ -355,6 +396,7 @@ var noiseShaderProgram;
 var normalShaderProgram;
 var basicShaderProgram;
 var cubeMapShaderProgram;
+var rippleShaderProgram;
 
 function initShaders() {
     var basicFragmentShader = getShader(gl, "basicShader-fs");
@@ -378,6 +420,25 @@ function initShaders() {
     basicShaderProgram.mvMatrixUniform = gl.getUniformLocation(basicShaderProgram, "uMVMatrix");
     basicShaderProgram.samplerUniform = gl.getUniformLocation(basicShaderProgram, "uSampler");
     basicShaderProgram.uColor = gl.getUniformLocation(basicShaderProgram, "uColor");
+
+    rippleShaderProgram = gl.createProgram();
+    gl.attachShader(rippleShaderProgram, getShader(gl, "rippleShader-vs"));
+    gl.attachShader(rippleShaderProgram, getShader(gl, "rippleShader-fs"));
+    gl.linkProgram(rippleShaderProgram);
+
+    if (!gl.getProgramParameter(rippleShaderProgram, gl.LINK_STATUS)) {
+        alert("Could not initialise rippleshader program");
+    }
+
+    gl.useProgram(rippleShaderProgram);
+
+    rippleShaderProgram.vertexPositionAttribute = gl.getAttribLocation(rippleShaderProgram, "aVertexPosition");
+    rippleShaderProgram.textureCoordAttribute = gl.getAttribLocation(rippleShaderProgram, "aTextureCoord");
+
+    rippleShaderProgram.pMatrixUniform = gl.getUniformLocation(rippleShaderProgram, "uPMatrix");
+    rippleShaderProgram.mvMatrixUniform = gl.getUniformLocation(rippleShaderProgram, "uMVMatrix");
+    rippleShaderProgram.uTime = gl.getUniformLocation(rippleShaderProgram, "time");
+    rippleShaderProgram.resolution = gl.getUniformLocation(rippleShaderProgram, "resolution");
 
     var fragmentShader = getShader(gl, "shader-fs");
     var vertexShader = getShader(gl, "shader-vs");
@@ -642,9 +703,9 @@ function setupLighting(){
     directionalLight.direction = [0.0, 3.0, 0.0];
     directionalLight.color = [1.0, 0.0, 0.0];
 
-    pointLight.direction = [10, 10.0, -20.0];
+    pointLight.direction = [0.0, 3.0, 0.0];
 
-    ambientLight.color = [-0.3, -0.3, 0.2, 1.0];
+    ambientLight.color = [0.2, 0.2, 0.6, 1.0];
 }
 
 function degToRad(degrees) {
@@ -705,20 +766,59 @@ function drawScene() {
     gl.useProgram(shaderProgram);
 
     gl.uniform4f(shaderProgram.ambientUniform, ambientLight.color[0], ambientLight.color[1], ambientLight.color[2], ambientLight.color[3]);
-//    gl.uniform3f(shaderProgram.directionalLight, directionalLight.direction[0], directionalLight.direction[1], directionalLight.direction[2]);
+    gl.uniform3f(shaderProgram.directionalLight, directionalLight.direction[0], directionalLight.direction[1], directionalLight.direction[2]);
     gl.uniform3f(shaderProgram.pointLight, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
 
+//    drawNoiseWater();
 
+    drawRippleWater();
 
 //    mat4.identity(mvMatrix);
 
+
+}
+
+function setRippleUniforms(){
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
+    gl.uniform1i(rippleShaderProgram.samplerUniform, 0);
+
+    gl.uniform2f(rippleShaderProgram.resolution, gl.viewportWidth, gl.viewportHeight);
+    var time = (new Date()).getTime();
+    gl.uniform1f(rippleShaderProgram.uTime, timeNow*100);
+}
+
+function drawRippleWater(){
+
+    gl.useProgram(rippleShaderProgram);
+
+    mat4.translate(mvMatrix, [0.0, -8.0, -20.0]);
+    mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
+    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    setRippleUniforms();
+    setMatrixUniforms(rippleShaderProgram);
+    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+}
+
+function drawNoiseWater(){
     mat4.toInverseMat3(mvMatrix, normalMatrix);
     mat3.transpose(normalMatrix);
     gl.uniformMatrix3fv(shaderProgram.nMatrixUniform, false, normalMatrix);
 
-    mat4.translate(mvMatrix, [0.0, -3.0, -10.0]);
+    mat4.translate(mvMatrix, [0.0, -8.0, -20.0]);
     mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
-    mat4.scale(mvMatrix, [5.0, 15.0, 1.0]);
+    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
 
 
 
@@ -817,13 +917,13 @@ var currentlyPressedKeys = {};
 function handleKeyDown(event) {
     currentlyPressedKeys[event.keyCode] = true;
 
-    if (String.fromCharCode(event.keyCode) == "W") {
-        alert("you hit w");
-        speed = 0.3;
-    }
-    if(String.fromCharCode(event.keyCode) == "S"){
-        speed = -0.3;
-    }
+//    if (String.fromCharCode(event.keyCode) == "W") {
+//        alert("you hit w");
+//        speed = 0.3;
+//    }
+//    if(String.fromCharCode(event.keyCode) == "S"){
+//        speed = -0.3;
+//    }
 }
 
 
@@ -852,11 +952,11 @@ function handleKeys() {
     }
     if (currentlyPressedKeys[38]) {
         // Up cursor key
-        speed = 0.3;
+        speed = 0.07;
     }
     if (currentlyPressedKeys[40]) {
         // Down cursor key
-        speed = -0.3;
+        speed = -0.07;
     }
 }
 
@@ -945,7 +1045,7 @@ function webGLStart() {
 <body onload="webGLStart();" style="background: #000;">
   <div id="slider"></div>
   <div id="amount"><h1 style="color: #fff;">50</h1></div>
-  <h1 style="color: #fff;">Reflection</h1>
+  <h1 style="color: #fff;">Water Height</h1>
 
 <canvas id="lesson01-canvas" style="border: none;" width="1400" height="500"></canvas>
 </body>
