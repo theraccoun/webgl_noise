@@ -867,6 +867,7 @@ var poolBuffer;
 var skyBoxBuffer;
 var sphereBuffer;
 var noiseWaterBuffer;
+var planeBuffer;
 
 function initDrawingBuffers() {
 
@@ -883,8 +884,9 @@ function initDrawingBuffers() {
 
     unitSquareBuffer = createRectangleBuffer(1, 1);
     poolBuffer = createRectangleBuffer(40, 30);
+    planeBuffer = createRectangleBuffer(8000, 8000);
     noiseWaterBuffer = createRectangleBuffer(60, 60);
-    skyBoxBuffer = createCubeBuffer(8000);
+    skyBoxBuffer = createCubeBuffer(80);
 
     sphereBuffer = createSphereBuffer(0.5);
 }
@@ -1067,19 +1069,25 @@ function drawScene() {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    mat4.perspective(55, gl.viewportWidth / gl.viewportHeight, 1.0, 50000.0, pMatrix);
+    mat4.perspective(65, gl.viewportWidth / gl.viewportHeight, 1.0, 100000.0, pMatrix);
 
-//    mat4.identity(mvMatrix);
+    mat4.identity(mvMatrix);
     mat4.rotate(mvMatrix, degToRad(-yaw + 30), [0, 1, 0]);
 //
 //    mat4.translate(mvMatrix, [-xPos, 0.0, -zPos]);
 
     if(isNoiseShader == 0 && skyBoxNum == 1){
-        mvPushMatrix();
-        mat4.scale(mvMatrix, [2, 2, 2]);
+//        mvPushMatrix();
+//        mat4.scale(mvMatrix, [2, 2, 2]);
+        drawPlaneWater();
         drawSkyBox();
-        mvPopMatrix();
+//        mvPopMatrix();
     }
+
+//    mvPushMatrix();
+//    mat4.scale(mvMatrix, [10, 10, 10]);
+//    drawSkyBox();
+//    mvPopMatrix();
 
 //    genEnvMap();
 
@@ -1108,6 +1116,26 @@ function drawScene() {
 
 }
 
+function drawPlaneWater(){
+    gl.useProgram(rippleShaderProgram);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, planeBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(swirlShaderProg.vertexPositionAttribute, planeBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(swirlShaderProg.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, planeBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(swirlShaderProg.textureCoordAttribute, planeBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(swirlShaderProg.textureCoordAttribute);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
+    mvPushMatrix();
+    mat4.translate(mvMatrix, [0.0, -200.0, 0.0]);
+    mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0]);
+    setRippleUniforms();
+    mvPopMatrix();
+    gl.drawElements(gl.TRIANGLES, poolBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+}
+
 function genEnvMap(){
 
     gl.useProgram(envMapShaderProgram);
@@ -1132,7 +1160,7 @@ function drawSkyBox(){
 
     gl.bindBuffer(gl.ARRAY_BUFFER, skyBoxBuffer.vertexPositionBuffer);
     gl.vertexAttribPointer(cubeMapShaderProgram.vertexPositionAttribute, skyBoxBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(cubeMapShaderProgram.cubeSamplerUniform);
+    gl.enableVertexAttribArray(cubeMapShaderProgram.vertexPositionAttribute);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
@@ -1314,15 +1342,15 @@ function initTextures() {
     waterTextureImg.image.onload = function () {
         handleLoadedTexture(waterTextureImg)
     }
-    waterTextureImg.image.src = "images/wavePorter.jpg";
+//    waterTextureImg.image.src = "images/wavePorter.jpg";
 
-//    if(isNoiseShader == 0){
-//        waterTextureImg.image.src = "images/waterText.jpg";
-//    }
-//    else{
-//        skyBoxNum = 0;
-//        waterTextureImg.image.src = "images/wavePorter.jpg";
-//    }
+    if(isNoiseShader == 0){
+        waterTextureImg.image.src = "images/orangeWater.bmp";
+    }
+    else{
+        skyBoxNum = 0;
+        waterTextureImg.image.src = "images/wavePorter.jpg";
+    }
 
 
     InitCubeMapTexture();
@@ -1360,7 +1388,7 @@ function LoadCubeImage(index, cubeTexture) {
     var cubeImage = new Image();
     cubeImage.onload = function () { UpdateTexture(index, cubeTexture, cubeImage); }
 
-    cubeImage.src = "images/fae02/fae" + index + ".jpg";
+    cubeImage.src = "images/sky5/ob" + index + ".jpg";
 
 
 }
@@ -1485,6 +1513,7 @@ function webGLStart() {
     normalFBO = initTextureFrameBuffer(512);
     envFBO = initTextureFrameBuffer(512);
     initDrawingBuffers();
+    InitCubeMapTexture();
     initTextures();
     setupLighting();
 
@@ -1540,7 +1569,7 @@ function changeSkyBox(){
 <div id="amount"><h1 style="color: #fff;">50</h1></div>
 <h1 style="color: #fff;">Water Height</h1>
 
-<canvas id="lesson01-canvas" style="border: none;" width="1400" height="700"></canvas>
+<canvas id="lesson01-canvas" style="border: none;" width="1600" height="800"></canvas>
 
 <\b> <\b><\b><\b><\b>
 <button onclick="changeShader()">Change Shader</button>
