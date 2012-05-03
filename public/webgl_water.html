@@ -190,6 +190,7 @@
 <script id="bumpShader2-fs" type="x-shader/x-fragment">
     precision highp float;
 
+
     uniform vec4 ambientColour;
     uniform vec4 diffuseColour;
     uniform vec4 specularColour;
@@ -524,8 +525,8 @@
     float aboveY = texture2D(waveSampler, tex + vec2(0.0, 1.0/sampleSize.y)).x;
     float belowY = texture2D(waveSampler, tex - vec2(0.0, 1.0/sampleSize.y)).x;
 
-    vec3 va = normalize(vec3(size.xy, rightX - leftX));
-    vec3 vb = normalize(vec3(-size.yx, aboveY - belowY));
+    //vec3 va = normalize(vec3(size.xy, rightX - leftX));
+    //vec3 vb = normalize(vec3(-size.yx, aboveY - belowY));
 
     //vec4 normVector = vec4( vec3(0.5*normalize(cross(va, vb))+0.5), curTexel);
     // vec4 normVector = vec4(cross(va, vb), curTexel);
@@ -817,6 +818,19 @@ function initShaders() {
         alert("Could not initialise bump shader2");
     }
 
+    bumpShaderProgram.vertexPositionAttribute = gl.getAttribLocation(bumpShaderProgram, "aVertexCoord");
+    bumpShaderProgram.textureCoordAttribute = gl.getAttribLocation(bumpShaderProgram, "aTextureCoord");
+
+    bumpShaderProgram.mvMatrixUniform = gl.getUniformLocation(bumpShaderProgram, "uMVMatrix");
+    bumpShaderProgram.pMatrixUniform = gl.getUniformLocation(bumpShaderProgram, "uPMatrix");
+    bumpShaderProgram.nMatrixUniform = gl.getUniformLocation(bumpShaderProgram, "uNMatrix");
+    bumpShaderProgram.lightPosition = gl.getUniformLocation(bumpShaderProgram, "vLightPosition");
+    bumpShaderProgram.ambientColor = gl.getUniformLocation(bumpShaderProgram, "ambientColour");
+    bumpShaderProgram.diffuseColor = gl.getUniformLocation(bumpShaderProgram, "diffuseColour");
+    bumpShaderProgram.specularColor = gl.getUniformLocation(bumpShaderProgram, "specularColour");
+    bumpShaderProgram.colorMap = gl.getUniformLocation(bumpShaderProgram, "colourMap");
+    bumpShaderProgram.normalMap = gl.getUniformLocation(bumpShaderProgram, "normalMap");
+
     gl.useProgram(null);
 
 }
@@ -869,7 +883,7 @@ function initDrawingBuffers() {
 
     unitSquareBuffer = createRectangleBuffer(1, 1);
     poolBuffer = createRectangleBuffer(40, 30);
-    noiseWaterBuffer = createRectangleBuffer(30, 30);
+    noiseWaterBuffer = createRectangleBuffer(60, 60);
     skyBoxBuffer = createCubeBuffer(8000);
 
     sphereBuffer = createSphereBuffer(0.5);
@@ -1081,12 +1095,14 @@ function drawScene() {
 //    gl.uniform3f(swirlShaderProg.directionalLight, directionalLight.direction[0], directionalLight.direction[1], directionalLight.direction[2]);
 //    gl.uniform3f(swirlShaderProg.pointLight, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
 //
-    if(isNoiseShader == 1){
-        drawNoiseWater();
-    }
-    else{
-        drawRippleWater();
-    }
+//    if(isNoiseShader == 1){
+//        drawNoiseWater();
+//    }
+//    else{
+//        drawRippleWater();
+//    }
+
+    drawBumpWater();
 
 }
 
@@ -1181,6 +1197,48 @@ function drawRippleWater(){
     gl.drawElements(gl.TRIANGLES, poolBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
+function drawBumpWater(){
+
+    gl.useProgram(bumpShaderProgram);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, poolBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(bumpShaderProgram.vertexPositionAttribute, poolBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(bumpShaderProgram.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, poolBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(bumpShaderProgram.textureCoordAttribute, poolBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(bumpShaderProgram.textureCoordAttribute);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
+    mvPushMatrix();
+    mvPushMatrix();
+    mat4.translate(mvMatrix, [xPos + 70.0, -5.0, -150.0 + zPos]);
+    mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
+    setBumpUniforms();
+    mvPopMatrix();
+    gl.drawElements(gl.TRIANGLES, poolBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+}
+
+function setBumpUniforms(){
+
+    setMatrixUniforms(bumpShaderProgram);
+    setNormalMatrix(bumpShaderProgram);
+
+    gl.uniform3f(bumpShaderProgram.lightPosition, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
+    gl.uniform4f(bumpShaderProgram.ambientColor, 0.0, 0.1, 0.1, 1.0);
+    gl.uniform4f(bumpShaderProgram.diffuseColor, 0.0, 0.1, 0.1, 1.0);
+    gl.uniform4f(bumpShaderProgram.specularColor, 0.5, 0.5, 0.5, 1.0);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
+    gl.uniform1i(bumpShaderProgram.colorMap, 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, normalFBO.texture);
+    gl.uniform1i(bumpShaderProgram.normalMap, 1);
+
+}
+
 
 function setModelViewInverse(prog){
     var inverseMV = mat4.create();
@@ -1224,6 +1282,8 @@ function drawNoiseWater(){
     gl.drawElements(gl.TRIANGLES, noiseWaterBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
+
+
 function drawSphere(){
     gl.useProgram(basicShaderProgram);
     gl.uniform4f(basicShaderProgram.uColor, 0.5, 0.5, 0.5, 1.0);
@@ -1240,6 +1300,7 @@ function drawSphere(){
 }
 
 var waterTextureImg;
+var normalMapText;
 
 function initTextures() {
     waterTextureImg = gl.createTexture();
@@ -1247,17 +1308,28 @@ function initTextures() {
     waterTextureImg.image.onload = function () {
         handleLoadedTexture(waterTextureImg)
     }
+    waterTextureImg.image.src = "images/wavePorter.jpg";
 
-    if(isNoiseShader == 0){
-        waterTextureImg.image.src = "images/waterText.jpg";
-    }
-    else{
-        skyBoxNum = 0;
-        waterTextureImg.image.src = "images/wavePorter.jpg";
-    }
+//    if(isNoiseShader == 0){
+//        waterTextureImg.image.src = "images/waterText.jpg";
+//    }
+//    else{
+//        skyBoxNum = 0;
+//        waterTextureImg.image.src = "images/wavePorter.jpg";
+//    }
 
 
     InitCubeMapTexture();
+}
+
+function initNormalTexture(){
+    normalMapText = gl.createTexture();
+    normalMapText.image = new Image();
+    normalMapText.image.onload = function(){
+        handleLoadedTexture(normalMapText);
+    }
+
+    normalMapText.image.src = "images/water_normal.jpg";
 }
 
 function handleLoadedTexture(texture) {
