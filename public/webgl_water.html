@@ -160,15 +160,10 @@
     void main(void)
     {
         vec4 posViewSpace = uMVMatrix * vec4(aVertexPosition, 1.0);
-
         vec4 viewDirectionViewSpace = posViewSpace - vec4(0.0, 0.0, 0.0, 1.0);
-
         viewDirection = vec3(uInverseMV * viewDirectionViewSpace);
-
         vec3 normalDirectionInViewSpace = uNMatrix * normal;
-
         normalDirection = normalize(vec3(vec4(normalDirectionInViewSpace, 0.0) * uMVMatrix));
-
         gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
     }
 </script>
@@ -223,8 +218,13 @@
     uniform float time;
     uniform vec2 resolution;
     uniform sampler2D tex;
+    uniform samplerCube cubeMap;
 
     varying vec2 vTexCoord;
+
+    varying vec3 viewDirection;
+    varying vec3 normalDirection;
+
 
     void main(void) {
     vec2 cPos = vTexCoord*2.0 - 1.0;
@@ -232,8 +232,22 @@
 
     vec2 uv = vTexCoord +(cPos/cLength)*cos(cLength*12.0-time*4.0)*0.03;
     vec3 col = texture2D(tex,uv).xyz;
+    //vec3 rippleCol = col.rgb;
 
-    gl_FragColor = vec4(col, 1.0);
+    //gl_FragColor = vec4(col, 1.0);
+
+    vec3 reflectedDirection = reflect(viewDirection, normalize(normalDirection));
+    vec3 envColor = textureCube(cubeMap, reflectedDirection).xyz;
+    //vec3 waterCol = texture2D(tex, vTexCoord).xyz;
+    //vec4 blue = vec4(0.0, 1.0, 0.0, 1.0);
+    //vec3 mixColor = vec3(waterCol.x + blue.x, waterCol.y + blue.y, waterCol.z + blue.z);
+    vec3 mixColor = envColor * 0.25 + col*0.75;
+    //if(col.z == 0.0){ gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);}
+    //else{
+    gl_FragColor = vec4(mixColor, 1.0);
+    //}
+
+
     }
 </script>
 
@@ -243,10 +257,27 @@
 
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
+    uniform mat3 uNMatrix;
+    uniform mat4 uInverseMV;
 
     varying vec2 vTexCoord;
 
+    varying vec3 viewDirection;
+    varying vec3 normalDirection;
+
+    vec3 normal = vec3(0.0, 0.0, 1.0);
+
+    void getEnvInfo(){
+    vec4 posViewSpace = uMVMatrix * vec4(aVertexPosition, 1.0);
+    vec4 viewDirectionViewSpace = posViewSpace - vec4(0.0, 0.0, 0.0, 1.0);
+    viewDirection = vec3(uInverseMV * viewDirectionViewSpace);
+    vec3 normalDirectionInViewSpace = uNMatrix * normal;
+    normalDirection = normalize(vec3(vec4(normalDirectionInViewSpace, 0.0) * uMVMatrix));
+    }
+
+
     void main(void) {
+    getEnvInfo();
     gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
     vTexCoord = aTextureCoord;
     }
@@ -565,6 +596,9 @@ function initShaders() {
     rippleShaderProgram.mvMatrixUniform = gl.getUniformLocation(rippleShaderProgram, "uMVMatrix");
     rippleShaderProgram.uTime = gl.getUniformLocation(rippleShaderProgram, "time");
     rippleShaderProgram.resolution = gl.getUniformLocation(rippleShaderProgram, "resolution");
+    rippleShaderProgram.nMatrixUniform = gl.getUniformLocation(rippleShaderProgram, "uNMatrix");
+    rippleShaderProgram.inverseMVUnivorm = gl.getUniformLocation(rippleShaderProgram, "uInverseMV");
+    rippleShaderProgram.cubeSamplerUniform = gl.getUniformLocation(rippleShaderProgram, "cubeMap");
 
     var fragmentShader = getShader(gl, "swirlShader-fs");
     var vertexShader = getShader(gl, "swirlShader-vs");
@@ -711,7 +745,8 @@ function mvPopMatrix() {
 
 
 var triangleVertexPositionBuffer;
-var squareBuffer;
+var unitSquareBuffer;
+var poolBuffer;
 var skyBoxBuffer;
 var sphereBuffer;
 
@@ -728,8 +763,8 @@ function initDrawingBuffers() {
     triangleVertexPositionBuffer.itemSize = 3;
     triangleVertexPositionBuffer.numItems = 3;
 
-    squareBuffer = createRectangleBuffer(30, 30);
-
+    unitSquareBuffer = createRectangleBuffer(1, 1);
+    poolBuffer = createRectangleBuffer(30, 30);
     skyBoxBuffer = createCubeBuffer(8000);
 
     sphereBuffer = createSphereBuffer(0.5);
@@ -737,6 +772,7 @@ function initDrawingBuffers() {
 
 var noiseFBO;
 var normalFBO;
+var envFBO;
 
 function initTextureFrameBuffer( width){
 
@@ -784,17 +820,17 @@ function genFBONoiseMap(){
 
     mat4.translate(mvMatrix, [-1.0, -1.0, 0.0]);
     mat4.scale(mvMatrix, [2.0, 2.0, 1.0]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(noiseShaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(noiseShaderProgram.vertexPositionAttribute, unitSquareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(noiseShaderProgram.vertexPositionAttribute);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
-    gl.vertexAttribPointer(noiseShaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(noiseShaderProgram.textureCoordAttribute, unitSquareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(noiseShaderProgram.textureCoordAttribute);
 
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, unitSquareBuffer.indexBuffer);
     setMatrixUniforms(noiseShaderProgram);
-    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, unitSquareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
 
     gl.bindTexture(gl.TEXTURE_2D, noiseFBO.texture);
@@ -820,23 +856,53 @@ function genFBONormalMap(){
 
     mat4.translate(mvMatrix, [-1.0, -1.0, 0.0]);
     mat4.scale(mvMatrix, [2.0, 2.0, 1.0]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(normalShaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(normalShaderProgram.vertexPositionAttribute, unitSquareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(normalShaderProgram.vertexPositionAttribute);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
-    gl.vertexAttribPointer(normalShaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(normalShaderProgram.textureCoordAttribute, unitSquareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(normalShaderProgram.textureCoordAttribute);
 
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, unitSquareBuffer.indexBuffer);
     setMatrixUniforms(normalShaderProgram);
-    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, unitSquareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
     gl.bindTexture(gl.TEXTURE_2D, normalFBO.texture);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.bindTexture(gl.TEXTURE_2D, null);
 }
 
+function genFBOEnvMap(){
+    gl.viewport(0, 0, 512, 512);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    mat4.identity(pMatrix);
+    mat4.ortho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0, pMatrix);
+
+    gl.useProgram(envMapShaderProgram);
+
+    mat4.identity(mvMatrix);
+
+    mat4.translate(mvMatrix, [-1.0, -1.0, 0.0]);
+    mat4.scale(mvMatrix, [2.0, 2.0, 1.0]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(noiseShaderProgram.vertexPositionAttribute, unitSquareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(noiseShaderProgram.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(noiseShaderProgram.textureCoordAttribute, unitSquareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(noiseShaderProgram.textureCoordAttribute);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, unitSquareBuffer.indexBuffer);
+    setMatrixUniforms(noiseShaderProgram);
+    gl.drawElements(gl.TRIANGLES, unitSquareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+
+
+    gl.bindTexture(gl.TEXTURE_2D, noiseFBO.texture);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+}
 
 
 var directionalLight = new Object();
@@ -891,9 +957,9 @@ function drawScene() {
 
 
 
-    drawSkyBox();
+//    drawSkyBox();
 
-    genEnvMap();
+//    genEnvMap();
 
 //    mvPushMatrix();
 //    mat4.translate(mvMatrix, pointLight.direction);
@@ -909,12 +975,9 @@ function drawScene() {
 ////
 //    drawNoiseWater();
 //
-//    drawRippleWater();
+    drawRippleWater();
 
 //    mat4.identity(mvMatrix);
-
-
-
 
 }
 
@@ -924,11 +987,11 @@ function genEnvMap(){
 
 
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(envMapShaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(envMapShaderProgram.vertexPositionAttribute, unitSquareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(envMapShaderProgram.vertexPositionAttribute);
 
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, unitSquareBuffer.indexBuffer);
     mvPushMatrix();
     mat4.translate(mvMatrix, [0.0, -1.0, -10.0]);
     mat4.rotate(mvMatrix, Math.PI/4, [1.0, 0.0, 0.0])
@@ -936,7 +999,7 @@ function genEnvMap(){
 
     setEnvMapUniforms();
     mvPopMatrix();
-    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, unitSquareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
 function drawSkyBox(){
@@ -968,6 +1031,16 @@ function setEnvMapUniforms(){
 }
 
 function setRippleUniforms(){
+    setNormalMatrix(rippleShaderProgram);
+    setModelViewInverse(rippleShaderProgram);
+    setMatrixUniforms(rippleShaderProgram);
+
+
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
+    gl.uniform1i(rippleShaderProgram.cubeSamplerUniform, 5);
+
+
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
     gl.uniform1i(rippleShaderProgram.samplerUniform, 0);
@@ -981,23 +1054,21 @@ function drawRippleWater(){
 
     gl.useProgram(rippleShaderProgram);
 
-    mat4.translate(mvMatrix, [0.0, -8.0, -20.0]);
-    mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
-    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
+    mat4.translate(mvMatrix, [0.0, 20.0, -20.0]);
+//   mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
+//    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(swirlShaderProg.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, poolBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(swirlShaderProg.vertexPositionAttribute, poolBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(swirlShaderProg.vertexPositionAttribute);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
-    gl.vertexAttribPointer(swirlShaderProg.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(swirlShaderProg.textureCoordAttribute, poolBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(swirlShaderProg.textureCoordAttribute);
 
-
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     setRippleUniforms();
-    setMatrixUniforms(rippleShaderProgram);
-    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, poolBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
 
@@ -1020,16 +1091,16 @@ function drawNoiseWater(){
     mat4.translate(mvMatrix, [0.0, -10.0, -20.0]);
     mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0]);
 //    mat4.rotate(mvMatrix, -Math.PI, [0,0,1]);
-    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
+//    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
 
 
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(swirlShaderProg.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(swirlShaderProg.vertexPositionAttribute, unitSquareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(swirlShaderProg.vertexPositionAttribute);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
-    gl.vertexAttribPointer(swirlShaderProg.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, unitSquareBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(swirlShaderProg.textureCoordAttribute, unitSquareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(swirlShaderProg.textureCoordAttribute);
 
     gl.activeTexture(gl.TEXTURE1);
@@ -1039,10 +1110,10 @@ function drawNoiseWater(){
     gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
     gl.uniform1i(swirlShaderProg.waterSamplerUniform, 2);
 
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, unitSquareBuffer.indexBuffer);
     setNormalMatrix(swirlShaderProg);
     setMatrixUniforms(swirlShaderProg);
-    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, unitSquareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
 function drawSphere(){
@@ -1210,6 +1281,7 @@ function webGLStart() {
     initShaders();
     noiseFBO = initTextureFrameBuffer(512);
     normalFBO = initTextureFrameBuffer(512);
+    envFBO = initTextureFrameBuffer(512);
     initDrawingBuffers();
     initTextures();
     setupLighting();
