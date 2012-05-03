@@ -1,0 +1,170 @@
+[33mcommit 7a6133bd560cd4594ad85fea6fa9dd2b0e414654[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Thu May 3 07:13:46 2012 -0600
+
+    Have a working bump map shader
+
+[33mcommit 526cc92e5b364ab15fead2cac3f532e70d0f882f[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Thu May 3 05:54:44 2012 -0600
+
+    Have a bumpshader2 which compiles. Need to set uniforms for it and such in code
+
+[33mcommit 330fb6f39c490d6d566118da7186d2af10b66d45[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Thu May 3 04:12:06 2012 -0600
+
+    Mostly just set crap up. Would like to finish bump map shader with lighting
+
+[33mcommit aeb301e973fdd23541c1ad654c09a3d8e253e27b[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Thu May 3 02:59:18 2012 -0600
+
+    A random push
+
+[33mcommit e81b2ca79763a39b63ee306c65014931ab5be6cf[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Thu May 3 00:32:55 2012 -0600
+
+    Put env map in with rippleshader
+
+[33mcommit 54b21df957772aad8deb5c244242d9edf3f33aee[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Wed May 2 22:02:18 2012 -0600
+
+    Slight improvement on environment map
+
+[33mcommit ea85e73ca13f01a48fa17582ba1881141fd69327[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Wed May 2 20:43:32 2012 -0600
+
+    Got an environment map shader working. Now need to apply to other maps
+
+[33mcommit ef0d0f71921d33dbf2c83772fb1196ab09a01855[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Wed May 2 00:52:40 2012 -0600
+
+    Added a good looking ripple effect. Finally got simplex noise looking correct
+
+[33mcommit 112a01a339c123fb866dc901c6c87d4d2f51486a[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 21:42:00 2012 -0600
+
+    Changed light color. Really just want to test out heroku again
+
+[33mcommit e75fc8f9fb2d882f27ee2a84eebbf26a0fa31c46[m
+Merge: cb2bb09 0dcdd23
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 21:32:59 2012 -0600
+
+    Merge branch 'master' of github.com:theraccoun/webgl_noise
+
+[33mcommit cb2bb09b2749492c0833ec6d3d16cbf4e5be392a[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 21:31:39 2012 -0600
+
+    Removed stupid skybox. Added radius to sphere drawing capability. Changed scene orinetation
+
+[33mcommit 0dcdd2393b6fee16ce125bdeb55bcb8251ad8180[m
+Author: psylinse <jetaggart@gmail.com>
+Date:   Mon Apr 30 21:10:34 2012 -0600
+
+    Added penis
+
+[33mcommit d09cb542bd16140ca2978bda75700af9da9065f3[m
+Merge: db79f0d 82e6b46
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 20:59:31 2012 -0600
+
+    Merge branch 'master' of github.com:theraccoun/webgl_noise
+
+[33mcommit db79f0d6c0bb1b9548491ec321c01c6f9dd29b21[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 20:59:18 2012 -0600
+
+    some shit
+
+[33mcommit 82e6b46d53766993c2a1b5b5f4365f851eb832d3[m
+Author: psylinse <jetaggart@gmail.com>
+Date:   Mon Apr 30 20:46:31 2012 -0600
+
+    Added slider example
+
+[33mcommit 3c7b86a3117f5aa322ee4a3c178f51f4bf4bf441[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 18:28:55 2012 -0600
+
+    Added point lighting.
+
+[33mcommit ad52cd8b3ce2ff906ac6164363cae1fbc6c908b4[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 12:06:55 2012 -0600
+
+    Added an initial skybox with movement. Skybox still needs some improvement, including fixing weird artifact of reverse images.
+
+[33mcommit 8d4695b50fa564f3499829d0c20f2fb1934dee21[m
+Merge: 22fae29 1635613
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 03:51:05 2012 -0600
+
+    Merge remote-tracking branch 'remotes/heroku/master'
+
+[33mcommit 22fae294eef26b83862677e3ea64c46d95815116[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Mon Apr 30 03:49:16 2012 -0600
+
+    Added normal mapping to water.
+
+[33mcommit 163561318649a8b818ee76df06eebc17d842d8d8[m
+Author: psylinse <jetaggart@gmail.com>
+Date:   Sun Apr 29 21:00:39 2012 -0600
+
+    Added homepage
+
+[33mcommit faa3234e9746a5794c48e52438c2a04710a234f5[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Sun Apr 29 19:48:36 2012 -0600
+
+    Changed index.html to webgl_water.html
+
+[33mcommit b4b14792886c582cdfee6a74aadcd8d27318939f[m
+Author: psylinse <jetaggart@gmail.com>
+Date:   Sun Apr 29 19:41:51 2012 -0600
+
+    Added idea to ignore
+
+[33mcommit 6992592e49865bec925a59450a3146cf711a54cc[m
+Author: psylinse <jetaggart@gmail.com>
+Date:   Sun Apr 29 19:39:55 2012 -0600
+
+    Added black background
+
+[33mcommit 92a84a4d3b9a14f86eba08c6f908c0c3d5c30874[m
+Author: psylinse <jetaggart@gmail.com>
+Date:   Sun Apr 29 19:38:31 2012 -0600
+
+    Testing connection
+
+[33mcommit a0e81d58fe320ff7b2a9e659ea328b39c8d64f34[m
+Author: psylinse <jetaggart@gmail.com>
+Date:   Sun Apr 29 19:10:15 2012 -0600
+
+    Herokuafied
+
+[33mcommit 7c5ed933533f3b0d29c500bc18d1f4966adb8689[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Sat Apr 28 23:46:54 2012 -0600
+
+    Removed some pointless ocean texture files
+
+[33mcommit ae56373cf771685cfa9f72cf6ef1a20b86ba7b61[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Sat Apr 28 23:45:12 2012 -0600
+
+    Have a very workable water solution that uses simplex noise combined with an actual water texture. Just need to add some lighting to it
+
+[33mcommit 1e3cc3bc6a62c9f541bf711cf99a3e574f30c613[m
+Author: Steven MacCoun <steven.maccoun@colorado.edu>
+Date:   Sat Apr 28 12:25:48 2012 -0600
+
+    Initial commit

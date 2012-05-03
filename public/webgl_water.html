@@ -1033,7 +1033,7 @@ function setupLighting(){
     directionalLight.direction = [0.0, 3.0, 0.0];
     directionalLight.color = [1.0, 0.0, 0.0];
 
-    pointLight.direction = [0.0, 3.0, 0.0];
+    pointLight.direction = [0.0, 1.0, 0.0];
 
     ambientLight.color = [0.2, 0.2, 0.6, 1.0];
 }
@@ -1071,10 +1071,10 @@ function drawScene() {
 
 //    mat4.identity(mvMatrix);
     mat4.rotate(mvMatrix, degToRad(-yaw + 30), [0, 1, 0]);
-
+//
 //    mat4.translate(mvMatrix, [-xPos, 0.0, -zPos]);
 
-    if(skyBoxNum > 0){
+    if(isNoiseShader == 0 && skyBoxNum == 1){
         mvPushMatrix();
         mat4.scale(mvMatrix, [2, 2, 2]);
         drawSkyBox();
@@ -1095,14 +1095,16 @@ function drawScene() {
 //    gl.uniform3f(swirlShaderProg.directionalLight, directionalLight.direction[0], directionalLight.direction[1], directionalLight.direction[2]);
 //    gl.uniform3f(swirlShaderProg.pointLight, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
 //
-//    if(isNoiseShader == 1){
-//        drawNoiseWater();
-//    }
-//    else{
-//        drawRippleWater();
-//    }
+    if(isNoiseShader == 0){
+        drawRippleWater();
 
-    drawBumpWater();
+    }
+    else if(isNoiseShader == 1){
+        drawNoiseWater();
+    }
+    else if(isNoiseShader == 2){
+        drawBumpWater();
+    }
 
 }
 
@@ -1189,7 +1191,6 @@ function drawRippleWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     mvPushMatrix();
-    mvPushMatrix();
     mat4.translate(mvMatrix, [xPos + 70.0, -5.0, -150.0 + zPos]);
     mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
     setRippleUniforms();
@@ -1211,12 +1212,17 @@ function drawBumpWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     mvPushMatrix();
-    mvPushMatrix();
     mat4.translate(mvMatrix, [xPos + 70.0, -5.0, -150.0 + zPos]);
     mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
     setBumpUniforms();
     mvPopMatrix();
     gl.drawElements(gl.TRIANGLES, poolBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+
+    mvPushMatrix();
+    mat4.identity(mvMatrix);
+    mat4.translate(mvMatrix, pointLight.direction);
+    drawSphere();
+    mvPopMatrix();
 }
 
 function setBumpUniforms(){
@@ -1225,8 +1231,8 @@ function setBumpUniforms(){
     setNormalMatrix(bumpShaderProgram);
 
     gl.uniform3f(bumpShaderProgram.lightPosition, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
-    gl.uniform4f(bumpShaderProgram.ambientColor, 0.0, 0.1, 0.1, 1.0);
-    gl.uniform4f(bumpShaderProgram.diffuseColor, 0.0, 0.1, 0.1, 1.0);
+    gl.uniform4f(bumpShaderProgram.ambientColor, 0.0, 0.0, 0.1, 1.0);
+    gl.uniform4f(bumpShaderProgram.diffuseColor, 0.0, 0.0, 0.5, 1.0);
     gl.uniform4f(bumpShaderProgram.specularColor, 0.5, 0.5, 0.5, 1.0);
 
     gl.activeTexture(gl.TEXTURE0);
@@ -1274,8 +1280,8 @@ function drawNoiseWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, noiseWaterBuffer.indexBuffer);
     mvPushMatrix();
-    mat4.translate(mvMatrix, [xPos + 50, -5.0, -100.0 + zPos]);
-    mat4.rotate(mvMatrix, rotatePond + Math.PI/6, [-1.0, 0.0, 0.0]);
+    mat4.translate(mvMatrix, [xPos + 60, -5.0, -200.0 + zPos]);
+    mat4.rotate(mvMatrix, rotatePond + Math.PI/3, [-1.0, 0.0, 0.0]);
     setNormalMatrix(swirlShaderProg);
     setMatrixUniforms(swirlShaderProg);
     mvPopMatrix();
@@ -1496,7 +1502,7 @@ function webGLStart() {
 var isNoiseShader = 0;
 
 function changeShader(){
-    isNoiseShader = (isNoiseShader + 1)%2;
+    isNoiseShader = (isNoiseShader + 1)%3;
     skyBoxNum = isNoiseShader;
     webGLStart();
 }
