@@ -191,10 +191,10 @@
     precision highp float;
 
 
-    uniform vec4 ambientColour;
-    uniform vec4 diffuseColour;
-    uniform vec4 specularColour;
-    uniform sampler2D colourMap; // This is the original texture
+    uniform vec4 ambientColor;
+    uniform vec4 diffuseColor;
+    uniform vec4 specularColor;
+    uniform sampler2D colorMap; // This is the original texture
     uniform sampler2D normalMap; // This is the normal-mapped version of our texture
 
 
@@ -215,10 +215,10 @@
     float diffuseIntensity = max(0.0, dot(normalize(normalAdjusted), normalize(vVaryingLightDir)));
 
     // Add the diffuse contribution blended with the standard texture lookup and add in the ambient light on top
-    vec3 colour = (diffuseIntensity * diffuseColour.rgb) * texture2D(colourMap, vTexCoords.st).rgb + ambientColour.rgb;
+    vec3 color = (diffuseIntensity * diffuseColor.rgb) * texture2D(colorMap, vTexCoords.st).rgb + ambientColor.rgb;
 
     // Set the almost final output color as a vec4 - only specular to go!
-    vec4 vFragColour = vec4(colour, 1.0);
+    vec4 vFragColor = vec4(color, 1.0);
 
     // Calc and apply specular contribution
     vec3 vReflection        = normalize(reflect(-normalize(normalAdjusted), normalize(vVaryingLightDir)));
@@ -230,10 +230,10 @@
     if (diffuseIntensity > 0.98)
     {
     float fSpec = pow(specularIntensity, 64.0);
-    vFragColour.rgb += vec3(fSpec * specularColour.rgb);
+    vFragColor.rgb += vec3(fSpec * specularColor.rgb);
     }
 
-    gl_FragColor = vFragColour;
+    gl_FragColor = vFragColor;
     }
 </script>
 
@@ -316,9 +316,7 @@
 
     varying vec2 vTexCoord;
 
-    varying vec3 viewDirection;
-    varying vec3 normalDirection;
-
+    varying vec3 reflectInWorldCoordinates;
 
     void main(void) {
     vec2 cPos = vTexCoord*2.0 - 1.0;
@@ -332,8 +330,7 @@
     gl_FragColor = vec4(col, 1.0);
     }
     else{
-    vec3 reflectedDirection = reflect(viewDirection, normalize(normalDirection));
-    vec3 envColor = textureCube(cubeMap, reflectedDirection).xyz;
+    vec3 envColor = textureCube(cubeMap, reflectInWorldCoordinates).xyz;
     vec3 mixColor = mix(envColor, col, 0.50);
     gl_FragColor = vec4(mixColor, 1.0);
     }
@@ -351,17 +348,32 @@
 
     varying vec2 vTexCoord;
 
-    varying vec3 viewDirection;
-    varying vec3 normalDirection;
+    varying vec3 reflectInWorldCoordinates;
 
     vec3 normal = vec3(0.0, 0.0, 1.0);
 
     void getEnvInfo(){
-    vec4 posViewSpace = uMVMatrix * vec4(aVertexPosition, 1.0);
-    vec4 viewDirectionViewSpace = posViewSpace - vec4(0.0, 0.0, 0.0, 1.0);
-    viewDirection = vec3(uInverseMV * viewDirectionViewSpace);
-    vec3 normalDirectionInViewSpace = uNMatrix * normal;
-    normalDirection = normalize(vec3(vec4(normalDirectionInViewSpace, 0.0) * uMVMatrix));
+
+
+    // First compute the normal vector in view space
+    vec3 N_InViewSpace = normalize(uNMatrix * normal);
+
+
+    // Now get the eyeVector in view space.
+    vec4 V_PosInEyeSpace = uMVMatrix * vec4(aVertexPosition, 1.0);
+    // This vector points from the camera to the vertex. We need the view
+    // vector, which points from the vertex to the camera
+   // vec4 V_DirectInEyeSpace = V_PosInEyeSpace;
+
+    // Get the V and N vec into world space to compute the R vect in World space
+    vec3 V_InWorldSpace = vec4(uInverseMV * vec4(V_PosInEyeSpace.xyz, 0.0)).xyz;
+    vec3 N_InWorldSpace = vec4(uInverseMV * vec4(N_InViewSpace, 0.0)).xyz;
+
+    // Okay, now we can compute the reflection vector in world space!
+    reflectInWorldCoordinates = reflect(V_InWorldSpace, N_InWorldSpace);
+
+    // Finally, set the position as would be done normally
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
     }
 
 
@@ -825,10 +837,10 @@ function initShaders() {
     bumpShaderProgram.pMatrixUniform = gl.getUniformLocation(bumpShaderProgram, "uPMatrix");
     bumpShaderProgram.nMatrixUniform = gl.getUniformLocation(bumpShaderProgram, "uNMatrix");
     bumpShaderProgram.lightPosition = gl.getUniformLocation(bumpShaderProgram, "vLightPosition");
-    bumpShaderProgram.ambientColor = gl.getUniformLocation(bumpShaderProgram, "ambientColour");
-    bumpShaderProgram.diffuseColor = gl.getUniformLocation(bumpShaderProgram, "diffuseColour");
-    bumpShaderProgram.specularColor = gl.getUniformLocation(bumpShaderProgram, "specularColour");
-    bumpShaderProgram.colorMap = gl.getUniformLocation(bumpShaderProgram, "colourMap");
+    bumpShaderProgram.ambientColor = gl.getUniformLocation(bumpShaderProgram, "ambientColor");
+    bumpShaderProgram.diffuseColor = gl.getUniformLocation(bumpShaderProgram, "diffuseColor");
+    bumpShaderProgram.specularColor = gl.getUniformLocation(bumpShaderProgram, "specularColor");
+    bumpShaderProgram.colorMap = gl.getUniformLocation(bumpShaderProgram, "colorMap");
     bumpShaderProgram.normalMap = gl.getUniformLocation(bumpShaderProgram, "normalMap");
 
     gl.useProgram(null);
@@ -884,8 +896,8 @@ function initDrawingBuffers() {
 
     unitSquareBuffer = createRectangleBuffer(1, 1);
     poolBuffer = createRectangleBuffer(40, 30);
-    planeBuffer = createRectangleBuffer(8000, 8000);
-    noiseWaterBuffer = createRectangleBuffer(60, 60);
+    planeBuffer = createRectangleBuffer(1, 1);
+    noiseWaterBuffer = createRectangleBuffer(120, 120);
     skyBoxBuffer = createCubeBuffer(80);
 
     sphereBuffer = createSphereBuffer(0.5);
@@ -1072,9 +1084,9 @@ function drawScene() {
     mat4.perspective(65, gl.viewportWidth / gl.viewportHeight, 1.0, 100000.0, pMatrix);
 
     mat4.identity(mvMatrix);
-    mat4.rotate(mvMatrix, degToRad(-yaw + 30), [0, 1, 0]);
-//
-//    mat4.translate(mvMatrix, [-xPos, 0.0, -zPos]);
+    mat4.rotate(mvMatrix, degToRad(-yaw + 40), [0, 1, 0]);
+
+//    mat4.translate(mvMatrix, [0.0, 200.0, 0.0]);
 
     if(isNoiseShader == 0 && skyBoxNum == 1){
 //        mvPushMatrix();
@@ -1083,11 +1095,6 @@ function drawScene() {
         drawSkyBox();
 //        mvPopMatrix();
     }
-
-//    mvPushMatrix();
-//    mat4.scale(mvMatrix, [10, 10, 10]);
-//    drawSkyBox();
-//    mvPopMatrix();
 
 //    genEnvMap();
 
@@ -1116,6 +1123,26 @@ function drawScene() {
 
 }
 
+function createSpecularMap(){
+    // Specular ramp data
+
+    var dataSpecular = new Uint8Array( 512 * 3 );
+
+    for ( var i = 0; i < rsize; i ++ ) {
+
+        var h = i / 255;
+
+        var tcolor = [0.0, 0.0, 1-h];
+
+        dataSpecular[ i * 3 ] 	  = Math.floor( tcolor[0] * 255 );
+        dataSpecular[ i * 3 + 1 ] = Math.floor( tcolor[0] * 255 );
+        dataSpecular[ i * 3 + 2 ] = Math.floor( tcolor[0] * 255 );
+
+    }
+
+
+}
+
 function drawPlaneWater(){
     gl.useProgram(rippleShaderProgram);
 
@@ -1130,7 +1157,8 @@ function drawPlaneWater(){
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     mvPushMatrix();
     mat4.translate(mvMatrix, [0.0, -200.0, 0.0]);
-    mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0]);
+    mat4.rotate(mvMatrix, Math.PI/2, [-1.0, 0.0, 0.0]);
+    mat4.scale(mvMatrix, [8000, 8000, 1]);
     setRippleUniforms();
     mvPopMatrix();
     gl.drawElements(gl.TRIANGLES, poolBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
@@ -1219,7 +1247,7 @@ function drawRippleWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     mvPushMatrix();
-    mat4.translate(mvMatrix, [xPos + 70.0, -5.0, -150.0 + zPos]);
+    mat4.translate(mvMatrix, [xPos + 90.0, -5.0, -150.0 + zPos]);
     mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
     setRippleUniforms();
     mvPopMatrix();
@@ -1240,7 +1268,7 @@ function drawBumpWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     mvPushMatrix();
-    mat4.translate(mvMatrix, [xPos + 70.0, -5.0, -150.0 + zPos]);
+    mat4.translate(mvMatrix, [xPos + 90.0, -5.0, -150.0 + zPos]);
     mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
     setBumpUniforms();
     mvPopMatrix();
@@ -1259,8 +1287,8 @@ function setBumpUniforms(){
     setNormalMatrix(bumpShaderProgram);
 
     gl.uniform3f(bumpShaderProgram.lightPosition, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
-    gl.uniform4f(bumpShaderProgram.ambientColor, 0.0, 0.0, 0.1, 1.0);
-    gl.uniform4f(bumpShaderProgram.diffuseColor, 0.0, 0.0, 0.5, 1.0);
+    gl.uniform4f(bumpShaderProgram.ambientColor, 0.0, 0.0, 0.0, 1.0);
+    gl.uniform4f(bumpShaderProgram.diffuseColor, 0.5, 0.5, 0.5, 1.0);
     gl.uniform4f(bumpShaderProgram.specularColor, 0.5, 0.5, 0.5, 1.0);
 
     gl.activeTexture(gl.TEXTURE0);
@@ -1344,12 +1372,12 @@ function initTextures() {
     }
 //    waterTextureImg.image.src = "images/wavePorter.jpg";
 
-    if(isNoiseShader == 0){
-        waterTextureImg.image.src = "images/orangeWater.bmp";
+    if(isNoiseShader == 0 || isNoiseShader == 2){
+        waterTextureImg.image.src = "images/wavePorter.bmp";
     }
     else{
         skyBoxNum = 0;
-        waterTextureImg.image.src = "images/wavePorter.jpg";
+        waterTextureImg.image.src = "images/wavePorter.bmp";
     }
 
 
@@ -1454,7 +1482,7 @@ function handleKeys() {
         speed = -0.5;
     }
     if(currentlyPressedKeys[82]){
-        rotateSpeed = 0.005;
+        rotateSpeed = 0.002;
 
     }
     if(currentlyPressedKeys[87]){
