@@ -31,7 +31,7 @@
     gl_FragColor = vec4(color, 1.0);
 
     // Get the normal in texture space
-    vec3 normTextSpace = texture2D(uSampler, vTexCoord).xyz;
+    //vec3 normTextSpace = texture2D(uSampler, vTexCoord).xyz;
     // Convert normal to eye space
     //vec3 normEyeSpace = uNMatrix * normTextSpace;
 
@@ -54,19 +54,24 @@
 
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
+    uniform mat4 uNMatrix;
     uniform vec3 uPointlightLocation;
 
     varying vec2 vTexCoord;
     varying vec3 vPointlightDirection;
 
+    vec3 normal = vec3(0.0, 0.0, 1.0);
+
     void main(void) {
 
     vec4 mvPos = uMVMatrix * vec4(aVertexPosition, 1.0);
-    vPointlightDirection = normalize(uPointlightLocation - mvPos.xyz);
+    vec3 vertPos3 = mvPos.xyz/mvPos.w;
 
-    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vPointlightDirection = normalize(uPointlightLocation - vertPos3);
 
     vTexCoord = aTextureCoord;
+
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
     }
 </script>
 
@@ -142,6 +147,93 @@
 
     //vec3 litColor = max(dot(normal, LightDir)
 
+</script>
+
+<script id="bumpShader2-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexCoord;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uPMatrix;
+    uniform mat4 uMVMatrix;
+    uniform mat3 uNMatrix;
+    uniform vec3 vLightPosition;
+
+    // Outgoing normal and light direction to fragment shader
+    varying vec3 vVaryingNormal;
+    varying vec3 vVaryingLightDir;
+    varying vec2 vTexCoords;
+
+    vec3 vNormal = vec3(0.0, 0.0, 1.0);
+
+    void main(void)
+    {
+
+    // Get surface normal in eye coordinates and pass them through to the fragment shader
+    vVaryingNormal = uNMatrix * vNormal;
+
+    // Get vertex position in eye coordinates
+    vec4 vPosition4 = uMVMatrix * vec4(aVertexCoord, 1.0);
+    vec3 vPosition3 = vPosition4.xyz / vPosition4.w;
+
+    // Get vector to light source
+    vVaryingLightDir = normalize(vLightPosition - vPosition3);
+
+    // Pass the texture coordinates through the vertex shader so they get smoothly interpolated
+    vTexCoords = aTextureCoord;
+
+    // Transform the geometry through the modelview-projection matrix
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexCoord, 1.0);
+    }
+
+</script>
+
+<script id="bumpShader2-fs" type="x-shader/x-fragment">
+    precision highp float;
+
+    uniform vec4 ambientColour;
+    uniform vec4 diffuseColour;
+    uniform vec4 specularColour;
+    uniform sampler2D colourMap; // This is the original texture
+    uniform sampler2D normalMap; // This is the normal-mapped version of our texture
+
+
+    varying vec3 vVaryingNormal;
+    varying vec3 vVaryingLightDir;
+    varying vec2 vTexCoords;
+
+
+    void main(void)
+    {
+    const float maxVariance = 2.0; // Mess around with this value to increase/decrease normal perturbation
+    const float minVariance = maxVariance / 2.0;
+
+    // Create a normal which is our standard normal + the normal map perturbation (which is going to be either positive or negative)
+    vec3 normalAdjusted = vVaryingNormal + normalize(texture2D(normalMap, vTexCoords.st).rgb * maxVariance - minVariance);
+
+    // Calculate diffuse intensity
+    float diffuseIntensity = max(0.0, dot(normalize(normalAdjusted), normalize(vVaryingLightDir)));
+
+    // Add the diffuse contribution blended with the standard texture lookup and add in the ambient light on top
+    vec3 colour = (diffuseIntensity * diffuseColour.rgb) * texture2D(colourMap, vTexCoords.st).rgb + ambientColour.rgb;
+
+    // Set the almost final output color as a vec4 - only specular to go!
+    vec4 vFragColour = vec4(colour, 1.0);
+
+    // Calc and apply specular contribution
+    vec3 vReflection        = normalize(reflect(-normalize(normalAdjusted), normalize(vVaryingLightDir)));
+    float specularIntensity = max(0.0, dot(normalize(normalAdjusted), vReflection));
+
+    // If the diffuse light intensity is over a given value, then add the specular component
+    // Only calc the pow function when the diffuseIntensity is high (adding specular for high diffuse intensities only runs faster)
+    // Put this as 0 for accuracy, and something high like 0.98 for speed
+    if (diffuseIntensity > 0.98)
+    {
+    float fSpec = pow(specularIntensity, 64.0);
+    vFragColour.rgb += vec3(fSpec * specularColour.rgb);
+    }
+
+    gl_FragColor = vFragColour;
+    }
 </script>
 
 <script id="envMapShader-vs" type="x-shader/x-vertex">
@@ -549,6 +641,7 @@ var basicShaderProgram;
 var cubeMapShaderProgram;
 var rippleShaderProgram;
 var envMapShaderProgram;
+var bumpShaderProgram;
 
 function initShaders() {
 
@@ -709,6 +802,20 @@ function initShaders() {
     envMapShaderProgram.nMatrixUniform = gl.getUniformLocation(envMapShaderProgram, "uNMatrix");
     envMapShaderProgram.inverseMVUnivorm = gl.getUniformLocation(envMapShaderProgram, "uInverseMV");
     envMapShaderProgram.cubeSamplerUniform = gl.getUniformLocation(envMapShaderProgram, "cubeMap");
+
+    var bFrag = getShader(gl, "bumpShader2-fs");
+    var bVert = getShader(gl, "bumpShader2-vs");
+
+    bumpShaderProgram = gl.createProgram();
+    gl.attachShader(bumpShaderProgram, bFrag);
+    gl.attachShader(bumpShaderProgram, bVert);
+    gl.linkProgram(bumpShaderProgram);
+
+    gl.useProgram(bumpShaderProgram);
+
+    if(!gl.getProgramParameter(bumpShaderProgram, gl.LINK_STATUS)){
+        alert("Could not initialise bump shader2");
+    }
 
     gl.useProgram(null);
 
@@ -1109,8 +1216,8 @@ function drawNoiseWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, noiseWaterBuffer.indexBuffer);
     mvPushMatrix();
-    mat4.translate(mvMatrix, [xPos, -5.0, -80.0 + zPos]);
-    mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
+    mat4.translate(mvMatrix, [xPos + 50, -5.0, -100.0 + zPos]);
+    mat4.rotate(mvMatrix, rotatePond + Math.PI/6, [-1.0, 0.0, 0.0]);
     setNormalMatrix(swirlShaderProg);
     setMatrixUniforms(swirlShaderProg);
     mvPopMatrix();
@@ -1141,7 +1248,14 @@ function initTextures() {
         handleLoadedTexture(waterTextureImg)
     }
 
-    waterTextureImg.image.src = "images/waterText.jpg";
+    if(isNoiseShader == 0){
+        waterTextureImg.image.src = "images/waterText.jpg";
+    }
+    else{
+        skyBoxNum = 0;
+        waterTextureImg.image.src = "images/wavePorter.jpg";
+    }
+
 
     InitCubeMapTexture();
 }
@@ -1193,13 +1307,7 @@ var currentlyPressedKeys = {};
 function handleKeyDown(event) {
     currentlyPressedKeys[event.keyCode] = true;
 
-//    if (String.fromCharCode(event.keyCode) == "W") {
-//        alert("you hit w");
-//        speed = 0.3;
-//    }
-//    if(String.fromCharCode(event.keyCode) == "S"){
-//        speed = -0.3;
-//    }
+
 }
 
 
@@ -1294,6 +1402,7 @@ function webGLStart() {
     var canvas = document.getElementById("lesson01-canvas");
     initGL(canvas);
     initShaders();
+    rotatePond = 0;
     noiseFBO = initTextureFrameBuffer(512);
     normalFBO = initTextureFrameBuffer(512);
     envFBO = initTextureFrameBuffer(512);
@@ -1316,6 +1425,8 @@ var isNoiseShader = 0;
 
 function changeShader(){
     isNoiseShader = (isNoiseShader + 1)%2;
+    skyBoxNum = isNoiseShader;
+    webGLStart();
 }
 
 var isEnvMap = 0;
