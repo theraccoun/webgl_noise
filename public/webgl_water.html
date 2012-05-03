@@ -12,7 +12,7 @@
 
 
 
-<script id="shader-fs" type="x-shader/x-fragment">
+<script id="swirlShader-fs" type="x-shader/x-fragment">
     precision mediump float;
 
     uniform sampler2D uSampler;
@@ -25,15 +25,19 @@
     varying vec3 vPointlightDirection;
 
     void main(void) {
-        float v = texture2D(uSampler, vTexCoord).x;
-        vec3 color = texture2D( waterSampler, vec2(v, 0.0)).xyz;
+        //float v = texture2D(uSampler, vTexCoord).x;
+        //vec3 color = texture2D( waterSampler, vec2(v, 0.0)).xyz;
         //vec4 oceanColor = texture2D(waterSampler, vTexCoord);
-        gl_FragColor = vec4(color, 1.0);
+        //gl_FragColor = vec4(color, 1.0);
 
         // Get the normal in texture space
-        vec3 normTextSpace = normalize(texture2D(uSampler, vTexCoord).xyz);
+        vec3 normTextSpace = texture2D(uSampler, vTexCoord).xyz;
         // Convert normal to eye space
-        vec3 normEyeSpace = uNMatrix * normTextSpace;
+        //vec3 normEyeSpace = uNMatrix * normTextSpace;
+
+
+        if(normTextSpace.z < 1.0){ gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);}
+        else{ gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);}
 
         //float NdotL = normalize(max(dot(normEyeSpace, vPointlightDirection), 0.0));
 
@@ -44,7 +48,7 @@
     }
 </script>
 
-<script id="shader-vs" type="x-shader/x-vertex">
+<script id="swirlShader-vs" type="x-shader/x-vertex">
     attribute vec3 aVertexPosition;
     attribute vec2 aTextureCoord;
 
@@ -63,6 +67,125 @@
     gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 
     vTexCoord = aTextureCoord;
+    }
+</script>
+
+<script id="bumpShader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aTexCoord;
+
+    uniform vec3 LightPosition;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+    uniform mat3 uNMatrix;
+
+    vec3 tangent = vec3(1.0, 0.0, 0.0);
+    vec3 normal = vec3(0.0, 1.0, 1.0);
+
+    varying vec3 LightDir;
+    varying vec3 EyeDir;
+    varying vec3 vTexCoord;
+
+    varying vec3 viewInWorldSpace;
+    varying vec3 normalInWorldSpace;
+
+    void main(void)
+    {
+        // Eye Position in world coordinates
+        EyeDir = vec3(uMVMatrix * vec4(aVertexPosition, 1.0);
+
+        // Get the normal, binormal, and tangent vectors
+        vec3 n = normalize( uNMatrix * normal);
+        vec3 t = normalize(uNMatrix * tangent);
+        vec3 b = cross(n, t);
+
+        vec3 v;
+        v.x = dot(LightPosition, t);
+        v.y = dot(LightPosition, b);
+        v.z = dot(LightPosition, n);
+        LightDir = normalize(v):
+
+        v.x = dot(EyeDir, t);
+        v.y = dot(EyeDir, b);
+        v.z = dot(EyeDir, n);
+        EyeDir = normalize(v);
+
+        gl_Position = uPMatrix * uMVMatrix * vec4(gl_Vertex, 1.0);
+        vTexCoord = aTexCoord;
+    }
+
+</script>
+
+<script id="bumpShader-fs" type="x-shader/x-fragment">
+
+    varying vec3 vTexCoord;
+    varying vec3 LightDir;
+    varying vec3 EyeDir;
+
+    varying vec3 viewInWorldSpace;
+    varying vec3 normalInWorldSpace;
+
+    uniform sampler2D normalMap;
+    uniform samplerCube cubeMap;
+
+    vec3 surfaceColor = vec3(0.0, 0.0, 1.0);
+
+    void main(void)
+    {
+        //vec3 normal = texture2D( normalMap, vTexCoord).xyz;
+        vec3 normal = vec3(0.0, 1.0, 0.0);
+        vec3 reflectDir = reflect(LightDir, normDelta);
+
+        vec3 reflectionDir = reflect(viewInWorldSpace, normalize(normalInWorldSpace));
+
+
+        //vec3 litColor = max(dot(normal, LightDir)
+
+</script>
+
+<script id="envMapShader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+    uniform mat3 uNMatrix;
+    uniform mat4 uInverseMV;
+
+    varying vec3 viewDirection;
+    varying vec3 normalDirection;
+
+    vec3 normal = vec3(0.0, 0.0, 1.0);
+
+    void main(void)
+    {
+        vec4 posViewSpace = uMVMatrix * vec4(aVertexPosition, 1.0);
+
+        vec4 viewDirectionViewSpace = posViewSpace - vec4(0.0, 0.0, 0.0, 1.0);
+
+        viewDirection = vec3(uInverseMV * viewDirectionViewSpace);
+
+        vec3 normalDirectionInViewSpace = uNMatrix * normal;
+
+        normalDirection = normalize(vec3(vec4(normalDirectionInViewSpace, 0.0) * uMVMatrix));
+
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    }
+</script>
+
+<script id="envMapShader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec3 viewDirection;
+    varying vec3 normalDirection;
+
+    uniform samplerCube cubeMap;
+
+    void main(void)
+    {
+        vec3 reflectedDirection = reflect(viewDirection, normalize(normalDirection));
+        gl_FragColor = textureCube(cubeMap, reflectedDirection);
+        //gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
 </script>
 
@@ -283,10 +406,11 @@
         float belowY = texture2D(waveSampler, tex - vec2(0.0, 1.0/sampleSize.y)).x;
 
         vec3 va = normalize(vec3(size.xy, rightX - leftX));
-        vec3 vb = normalize(vec3(size.xy, aboveY - belowY));
+        vec3 vb = normalize(vec3(-size.yx, aboveY - belowY));
 
-        //vec4 bumpVector = vec4( vec3(0.5*normalize(cross(va, vb))+0.5), curTexel);
-        vec4 normVector = vec4(0.5*normalize( vec3(curTexel - rightX, curTexel - aboveY, 0.06)) + 0.5, 1.0);
+       //vec4 normVector = vec4( vec3(0.5*normalize(cross(va, vb))+0.5), curTexel);
+        vec4 normVector = vec4(cross(va, vb), curTexel);
+       // vec4 normVector = vec4(0.5*normalize( vec3(curTexel - rightX, curTexel - aboveY, 0.06)) + 0.5, 1.0);
 
         return normVector;
     }
@@ -391,14 +515,16 @@ function getShader(gl, id) {
 
 
 
-var shaderProgram;
+var swirlShaderProg;
 var noiseShaderProgram;
 var normalShaderProgram;
 var basicShaderProgram;
 var cubeMapShaderProgram;
 var rippleShaderProgram;
+var envMapShaderProgram;
 
 function initShaders() {
+
     var basicFragmentShader = getShader(gl, "basicShader-fs");
     var basicVertexShader = getShader(gl, "basicShader-vs");
 
@@ -440,32 +566,32 @@ function initShaders() {
     rippleShaderProgram.uTime = gl.getUniformLocation(rippleShaderProgram, "time");
     rippleShaderProgram.resolution = gl.getUniformLocation(rippleShaderProgram, "resolution");
 
-    var fragmentShader = getShader(gl, "shader-fs");
-    var vertexShader = getShader(gl, "shader-vs");
+    var fragmentShader = getShader(gl, "swirlShader-fs");
+    var vertexShader = getShader(gl, "swirlShader-vs");
 
-    shaderProgram = gl.createProgram();
-    gl.attachShader(shaderProgram, vertexShader);
-    gl.attachShader(shaderProgram, fragmentShader);
-    gl.linkProgram(shaderProgram);
+    swirlShaderProg = gl.createProgram();
+    gl.attachShader(swirlShaderProg, vertexShader);
+    gl.attachShader(swirlShaderProg, fragmentShader);
+    gl.linkProgram(swirlShaderProg);
 
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+    if (!gl.getProgramParameter(swirlShaderProg, gl.LINK_STATUS)) {
         alert("Could not initialise shaders");
     }
 
-    gl.useProgram(shaderProgram);
+    gl.useProgram(swirlShaderProg);
 
-    shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-    shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "aTextureCoord");
+    swirlShaderProg.vertexPositionAttribute = gl.getAttribLocation(swirlShaderProg, "aVertexPosition");
+    swirlShaderProg.textureCoordAttribute = gl.getAttribLocation(swirlShaderProg, "aTextureCoord");
 
 
-    shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-    shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
-    shaderProgram.nMatrixUniform = gl.getUniformLocation(shaderProgram, "uNMatrix");
-    shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
-    shaderProgram.waterSamplerUniform = gl.getUniformLocation(shaderProgram, "waterSampler");
-    shaderProgram.ambientUniform = gl.getUniformLocation(shaderProgram, "ambientLight");
-    shaderProgram.directionalLight = gl.getUniformLocation(shaderProgram, "directLightDir");
-    shaderProgram.pointLight = gl.getUniformLocation(shaderProgram, "uPointlightLocation");
+    swirlShaderProg.pMatrixUniform = gl.getUniformLocation(swirlShaderProg, "uPMatrix");
+    swirlShaderProg.mvMatrixUniform = gl.getUniformLocation(swirlShaderProg, "uMVMatrix");
+    swirlShaderProg.nMatrixUniform = gl.getUniformLocation(swirlShaderProg, "uNMatrix");
+    swirlShaderProg.samplerUniform = gl.getUniformLocation(swirlShaderProg, "uSampler");
+    swirlShaderProg.waterSamplerUniform = gl.getUniformLocation(swirlShaderProg, "waterSampler");
+    swirlShaderProg.ambientUniform = gl.getUniformLocation(swirlShaderProg, "ambientLight");
+    swirlShaderProg.directionalLight = gl.getUniformLocation(swirlShaderProg, "directLightDir");
+    swirlShaderProg.pointLight = gl.getUniformLocation(swirlShaderProg, "uPointlightLocation");
 
 
     var noiseFragShader = getShader(gl, "noiseShader-fs");
@@ -530,19 +656,39 @@ function initShaders() {
     cubeMapShaderProgram.pMatrixUniform = gl.getUniformLocation(cubeMapShaderProgram, "uPMatrix");
     cubeMapShaderProgram.mvMatrixUniform = gl.getUniformLocation(cubeMapShaderProgram, "uMVMatrix");
     cubeMapShaderProgram.cubeSamplerUniform = gl.getUniformLocation(cubeMapShaderProgram, "cubeMap");
-//
-//    alert(normalShaderProgram.pMatrixUniform);
-//    alert(normalShaderProgram.mvMatrixUniform);
-//    alert(normalShaderProgram.uNoiseSampler);
+
+    var envFrag = getShader(gl, "envMapShader-fs");
+    var envVert = getShader(gl, "envMapShader-vs");
+    envMapShaderProgram = gl.createProgram();
+    gl.attachShader(envMapShaderProgram, envFrag);
+    gl.attachShader(envMapShaderProgram, envVert );
+    gl.linkProgram(envMapShaderProgram);
+
+    gl.useProgram(envMapShaderProgram);
+
+    if(!gl.getProgramParameter(envMapShaderProgram, gl.LINK_STATUS)){
+        alert("Could not initialise envMap shader");
+    }
+
+
+    envMapShaderProgram.vertexPositionAttribute = gl.getAttribLocation(envMapShaderProgram, "aVertexPosition");
+
+    envMapShaderProgram.pMatrixUniform = gl.getUniformLocation(envMapShaderProgram, "uPMatrix");
+    envMapShaderProgram.mvMatrixUniform = gl.getUniformLocation(envMapShaderProgram, "uMVMatrix");
+    envMapShaderProgram.nMatrixUniform = gl.getUniformLocation(envMapShaderProgram, "uNMatrix");
+    envMapShaderProgram.inverseMVUnivorm = gl.getUniformLocation(envMapShaderProgram, "uInverseMV");
+    envMapShaderProgram.cubeSamplerUniform = gl.getUniformLocation(envMapShaderProgram, "cubeMap");
+
+    alert(envMapShaderProgram.cubeSamplerUniform);
 
     gl.useProgram(null);
+
 }
 
 
 var mvMatrix = mat4.create();
 var pMatrix = mat4.create();
 var mvMatrixStack = [];
-var normalMatrix = mat3.create();
 
 
 function setMatrixUniforms(sp) {
@@ -712,6 +858,86 @@ function degToRad(degrees) {
     return degrees * Math.PI / 180;
 }
 
+
+
+var yaw = 0;
+
+var xPos = 0;
+var zPos = 0;
+var yawRate = 0;
+var speed = 0;
+
+function drawScene() {
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, noiseFBO.framebuffer);
+    genFBONoiseMap();
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, normalFBO.framebuffer);
+    genFBONormalMap();
+
+//    var pixelValues = new Uint8Array(4);
+//    gl.readPixels(5, 35, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelValues);
+//    alert(pixelValues[1]);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 1.0, 50000.0, pMatrix);
+
+    mat4.identity(mvMatrix);
+    mat4.rotate(mvMatrix, degToRad(-yaw), [0, 1, 0]);
+//    mat4.rotate(mvMatrix, Math.PI, [0,0,1]);
+    mat4.translate(mvMatrix, [-xPos, 0, -zPos]);
+
+
+
+    drawSkyBox();
+
+    genEnvMap();
+
+//    mvPushMatrix();
+//    mat4.translate(mvMatrix, pointLight.direction);
+//    drawSphere();
+//    mvPopMatrix();
+//
+//
+//    gl.useProgram(swirlShaderProg);
+//
+//    gl.uniform4f(swirlShaderProg.ambientUniform, ambientLight.color[0], ambientLight.color[1], ambientLight.color[2], ambientLight.color[3]);
+//    gl.uniform3f(swirlShaderProg.directionalLight, directionalLight.direction[0], directionalLight.direction[1], directionalLight.direction[2]);
+//    gl.uniform3f(swirlShaderProg.pointLight, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
+////
+//    drawNoiseWater();
+//
+//    drawRippleWater();
+
+//    mat4.identity(mvMatrix);
+
+
+
+
+}
+
+function genEnvMap(){
+
+    gl.useProgram(envMapShaderProgram);
+
+    mvPushMatrix();
+    mat4.translate(mvMatrix, [0.0, -8.0, -20.0]);
+    mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
+    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
+    mvPopMatrix();
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(envMapShaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(envMapShaderProgram.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    setEnvMapUniforms();
+    gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+}
+
 function drawSkyBox(){
     gl.useProgram(cubeMapShaderProgram);
 
@@ -728,54 +954,16 @@ function drawSkyBox(){
     gl.drawElements(gl.TRIANGLES, skyBoxBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
-var yaw = 0;
+function setEnvMapUniforms(){
 
-var xPos = 0;
-var zPos = 0;
-var yawRate = 0;
-var speed = 0;
-
-function drawScene() {
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, noiseFBO.framebuffer);
-    genFBONoiseMap();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, normalFBO.framebuffer);
-    genFBONormalMap();
-//    var pixelValues = new Uint8Array(4);
-//    gl.readPixels(5, 35, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelValues);
-//    alert(pixelValues[1]);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    setNormalMatrix(envMapShaderProgram);
+    setMatrixUniforms(envMapShaderProgram);
+    setModelViewInverse(envMapShaderProgram);
 
 
-    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 1.0, 50000.0, pMatrix);
-    mat4.identity(mvMatrix);
-    mat4.rotate(mvMatrix, degToRad(-yaw), [0, 1, 0]);
-    mat4.translate(mvMatrix, [-xPos, 0, -zPos]);
-//    drawSkyBox();
-
-    mvPushMatrix();
-    mat4.translate(mvMatrix, pointLight.direction);
-    drawSphere();
-    mvPopMatrix();
-
-
-    gl.useProgram(shaderProgram);
-
-    gl.uniform4f(shaderProgram.ambientUniform, ambientLight.color[0], ambientLight.color[1], ambientLight.color[2], ambientLight.color[3]);
-    gl.uniform3f(shaderProgram.directionalLight, directionalLight.direction[0], directionalLight.direction[1], directionalLight.direction[2]);
-    gl.uniform3f(shaderProgram.pointLight, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
-
-//    drawNoiseWater();
-
-    drawRippleWater();
-
-//    mat4.identity(mvMatrix);
-
-
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
+    gl.uniform1i(envMapShaderProgram.cubeSamplerUniform, 0);
 }
 
 function setRippleUniforms(){
@@ -797,12 +985,12 @@ function drawRippleWater(){
     mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+    gl.vertexAttribPointer(swirlShaderProg.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(swirlShaderProg.vertexPositionAttribute);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
-    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+    gl.vertexAttribPointer(swirlShaderProg.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(swirlShaderProg.textureCoordAttribute);
 
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
@@ -811,34 +999,48 @@ function drawRippleWater(){
     gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
-function drawNoiseWater(){
+
+function setModelViewInverse(prog){
+    var inverseMV = mat4.create();
+    mat4.inverse(mvMatrix, inverseMV);
+    gl.uniformMatrix4fv(prog.inverseMVUnivorm, false, inverseMV);
+}
+
+function setNormalMatrix(prog){
+    var normalMatrix = mat3.create();
     mat4.toInverseMat3(mvMatrix, normalMatrix);
     mat3.transpose(normalMatrix);
-    gl.uniformMatrix3fv(shaderProgram.nMatrixUniform, false, normalMatrix);
+    gl.uniformMatrix3fv(prog.nMatrixUniform, false, normalMatrix);
+}
 
-    mat4.translate(mvMatrix, [0.0, -8.0, -20.0]);
-    mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
+function drawNoiseWater(){
+
+
+    mat4.translate(mvMatrix, [0.0, -10.0, -20.0]);
+    mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0]);
+//    mat4.rotate(mvMatrix, -Math.PI, [0,0,1]);
     mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
 
 
 
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+    gl.vertexAttribPointer(swirlShaderProg.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(swirlShaderProg.vertexPositionAttribute);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.textureCoordBuffer);
-    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+    gl.vertexAttribPointer(swirlShaderProg.textureCoordAttribute, squareBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(swirlShaderProg.textureCoordAttribute);
 
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, normalFBO.texture);
-    gl.uniform1i(shaderProgram.samplerUniform, 1);
+    gl.uniform1i(swirlShaderProg.samplerUniform, 1);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
-    gl.uniform1i(shaderProgram.waterSamplerUniform, 2);
+    gl.uniform1i(swirlShaderProg.waterSamplerUniform, 2);
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
-    setMatrixUniforms(shaderProgram);
+    setNormalMatrix(swirlShaderProg);
+    setMatrixUniforms(swirlShaderProg);
     gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
@@ -866,7 +1068,7 @@ function initTextures() {
         handleLoadedTexture(waterTextureImg)
     }
 
-    waterTextureImg.image.src = "images/wavePorter.jpg";
+    waterTextureImg.image.src = "images/waterText.jpg";
 
     InitCubeMapTexture();
 }
@@ -891,7 +1093,7 @@ function LoadCubeImage(index, cubeTexture) {
     var cubeImage = new Image();
     cubeImage.onload = function () { UpdateTexture(index, cubeTexture, cubeImage); }
 
-    cubeImage.src = "images/mars_water.jpg";
+    cubeImage.src = "images/skyface" + index + ".jpg";
 
 
 }
@@ -900,7 +1102,6 @@ var cubeTexture;
 
 function InitCubeMapTexture() {
     cubeTexture = gl.createTexture();
-    cubeTexture.texUnit = 2;
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
 
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
