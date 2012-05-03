@@ -6,7 +6,7 @@
  * To change this template use File | Settings | File Templates.
  */
 
-function createRectangleBuffer(){
+function createRectangleBuffer(w, l){
     var squareBuffer = {
         vertexPositionBuffer : null,
         textureCoordBuffer : null,
@@ -17,10 +17,10 @@ function createRectangleBuffer(){
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
 
     var vertices = [
-        -1.0, -1.0,  1.0,
-        1.0, -1.0,  1.0,
-        1.0,  1.0,  1.0,
-        -1.0,  1.0,  1.0
+        -w, -l,  0.0,
+        w, -l,  0.0,
+        w,  l,  0.0,
+        -w,  l,  0.0
     ];
 
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);

@@ -679,7 +679,6 @@ function initShaders() {
     envMapShaderProgram.inverseMVUnivorm = gl.getUniformLocation(envMapShaderProgram, "uInverseMV");
     envMapShaderProgram.cubeSamplerUniform = gl.getUniformLocation(envMapShaderProgram, "cubeMap");
 
-    alert(envMapShaderProgram.cubeSamplerUniform);
 
     gl.useProgram(null);
 
@@ -729,7 +728,7 @@ function initDrawingBuffers() {
     triangleVertexPositionBuffer.itemSize = 3;
     triangleVertexPositionBuffer.numItems = 3;
 
-    squareBuffer = createRectangleBuffer();
+    squareBuffer = createRectangleBuffer(30, 30);
 
     skyBoxBuffer = createCubeBuffer(8000);
 
@@ -923,18 +922,20 @@ function genEnvMap(){
 
     gl.useProgram(envMapShaderProgram);
 
-    mvPushMatrix();
-    mat4.translate(mvMatrix, [0.0, -8.0, -20.0]);
-    mat4.rotate(mvMatrix, Math.PI/2, [1.0, 0.0, 0.0])
-    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
-    mvPopMatrix();
+
 
     gl.bindBuffer(gl.ARRAY_BUFFER, squareBuffer.vertexPositionBuffer);
     gl.vertexAttribPointer(envMapShaderProgram.vertexPositionAttribute, squareBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(envMapShaderProgram.vertexPositionAttribute);
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareBuffer.indexBuffer);
+    mvPushMatrix();
+    mat4.translate(mvMatrix, [0.0, -1.0, -10.0]);
+    mat4.rotate(mvMatrix, Math.PI/4, [1.0, 0.0, 0.0])
+//    mat4.scale(mvMatrix, [15.0, 15.0, 1.0]);
+
     setEnvMapUniforms();
+    mvPopMatrix();
     gl.drawElements(gl.TRIANGLES, squareBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
@@ -957,8 +958,8 @@ function drawSkyBox(){
 function setEnvMapUniforms(){
 
     setNormalMatrix(envMapShaderProgram);
-    setMatrixUniforms(envMapShaderProgram);
     setModelViewInverse(envMapShaderProgram);
+    setMatrixUniforms(envMapShaderProgram);
 
 
     gl.activeTexture(gl.TEXTURE0);
