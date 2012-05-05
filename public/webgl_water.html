@@ -194,8 +194,9 @@
     uniform vec4 ambientColor;
     uniform vec4 diffuseColor;
     uniform vec4 specularColor;
-    uniform sampler2D colorMap; // This is the original texture
-    uniform sampler2D normalMap; // This is the normal-mapped version of our texture
+    uniform sampler2D waterTexture;
+    uniform sampler2D envMap;
+    uniform sampler2D normalMap;
     uniform samplerCube cubeMap;
     uniform float isEnvMap;
 
@@ -207,39 +208,39 @@
 
     void main(void)
     {
-    const float maxVariance = 2.0; // Mess around with this value to increase/decrease normal perturbation
+    const float maxVariance = 3.0; // Amount to perturb normal
     const float minVariance = maxVariance / 2.0;
 
     // Perturbate the normal vector using the normal map
     vec3 normalAdjusted = vVaryingNormal + normalize(texture2D(normalMap, vTexCoords.st).rgb * maxVariance - minVariance);
 
-    // Calculate diffuse intensity
+    //Blend the water texture with the envMap, then mix this with the diffuse intensity
+    vec3 waterCol = texture2D(waterTexture, vTexCoords).rgb;
+    vec3 envCol = texture2D(envMap, vTexCoords).rgb;
+    vec3 mixCol = mix(waterCol, envCol, 0.8);
+
+    // Combine blend with diffuse lighting
     float diffuseIntensity = max(0.0, dot(normalize(normalAdjusted), normalize(vVaryingLightDir)));
-
-
-    // Add the diffuse contribution blended with the standard texture lookup and add in the ambient light on top
-    vec3 color = (diffuseIntensity * diffuseColor.rgb) * texture2D(colorMap, vTexCoords.st).rgb + ambientColor.rgb;
+    vec3 color;
+    if(isEnvMap == 1.0){
+    color = (diffuseIntensity * diffuseColor.rgb) * mixCol + ambientColor.rgb;
+    }else{
+    color = (diffuseIntensity * diffuseColor.rgb) * waterCol + ambientColor.rgb;
+    }
 
     // Set the almost final output color as a vec4 - only specular to go!
-    vec4 vFragColor = vec4(color, 0.3);
+    vec4 vFragColor = vec4(color, 1.0);
 
     // Calc and apply specular contribution
     vec3 vReflection        = normalize(reflect(-normalize(normalAdjusted), normalize(vVaryingLightDir)));
-    if(isEnvMap == 1.0){
-    vec3 envColor = textureCube(cubeMap, vReflection).xyz;
-    //Mix the color with the environment mapping color
-    vec4 mixColor = mix(vec4(envColor, 1.0), vFragColor, 0.1);
-    vFragColor = mixColor;
-    }
+
     float specularIntensity = max(0.0, dot(normalize(normalAdjusted), vReflection));
 
     // If the diffuse light intensity is over a given value, then add the specular component
     // Only calc the pow function when the diffuseIntensity is high (adding specular for high diffuse intensities only runs faster)
     // Put this as 0 for accuracy, and something high like 0.98 for speed
-    if (diffuseIntensity > 0.98)
-    {
+    if (diffuseIntensity > 0.98){
     float fSpec = pow(specularIntensity, 64.0);
-    vFragColor.rgb += vec3(fSpec * specularColor.rgb);
     }
 
     gl_FragColor = vec4(vFragColor.xyz, 1.0);
@@ -330,17 +331,22 @@
 
     void main(void) {
 
-    vec2 cPos = vTexCoord*2.0 - 1.0;
-    float cLength = length(cPos);
+    vec2 cPos1 = vTexCoord*2.0 - 1.0 - 0.5;
+    float cLength1 = length(cPos1);
+    vec2 cPos2 = vTexCoord*2.0 - 1.0 + 0.5;
+    float cLength2 = length(cPos2);
 
-    vec2 uv = vTexCoord +(cPos/cLength)*cos(cLength*12.0-time*4.0)*0.03;
-    vec3 waterCol = texture2D(waterSampler, uv).xyz;
-    vec3 envCol = texture2D(envMap, uv).xyz;
-    vec3 mixCol = mix(waterCol, envCol, 0.7);
+    vec2 uv1 = vTexCoord +(cPos1/cLength1)*cos(cLength1*12.0-time*4.0)*0.03;
+    vec2 uv2 = vTexCoord +(cPos2/cLength2)*cos(cLength2*5.0-time*4.0)*0.03;
+    vec3 waterCol1 = texture2D(waterSampler, uv1).xyz;
+   vec3 waterCol2 = texture2D(waterSampler, uv2+uv1).xyz;
+    //vec3 waterCol = waterCol1 + waterCol2;
+    vec3 envCol = texture2D(envMap, uv1).xyz;
+    vec3 mixCol = mix(waterCol2, envCol, 0.7);
     //vec3 rippleCol = col.rgb;
 
     if(isEnvMap == 1.0){
-    gl_FragColor = vec4(waterCol, 1.0);
+    gl_FragColor = vec4(waterCol2, 1.0);
     }
     else{
     //vec3 envColor = textureCube(cubeMap, reflectInWorldCoordinates).xyz;
@@ -854,7 +860,8 @@ function initShaders() {
     bumpShaderProgram.ambientColor = gl.getUniformLocation(bumpShaderProgram, "ambientColor");
     bumpShaderProgram.diffuseColor = gl.getUniformLocation(bumpShaderProgram, "diffuseColor");
     bumpShaderProgram.specularColor = gl.getUniformLocation(bumpShaderProgram, "specularColor");
-    bumpShaderProgram.colorMap = gl.getUniformLocation(bumpShaderProgram, "colorMap");
+    bumpShaderProgram.waterSampler = gl.getUniformLocation(bumpShaderProgram, "waterSampler");
+    bumpShaderProgram.envMap = gl.getUniformLocation(bumpShaderProgram, "envMap");
     bumpShaderProgram.normalMap = gl.getUniformLocation(bumpShaderProgram, "normalMap");
     bumpShaderProgram.cubeSamplerUniform = gl.getUniformLocation(bumpShaderProgram, "cubeMap");
     bumpShaderProgram.isEnvMap = gl.getUniformLocation(bumpShaderProgram, "isEnvMap");
@@ -1104,17 +1111,17 @@ function drawScene() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 //    mat4.perspective(65, gl.viewportWidth / gl.viewportHeight, 1.0, 100000.0, pMatrix);
+    mat4.identity(mvMatrix);
+    mat4.rotate(mvMatrix, degToRad(-yaw + 40), [0, 1, 0]);
 
+    mat4.translate(mvMatrix, [-xPos, 0.0, -zPos]);
 
     genFBOEnvMap();
 
     var asp = gl.viewportWidth/gl.viewportHeight;
     mat4.frustum(-2, 2, -0.5, 2, 1.0, 100000.0, pMatrix);
 
-    mat4.identity(mvMatrix);
-    mat4.rotate(mvMatrix, degToRad(-yaw + 40), [0, 1, 0]);
 
-    mat4.translate(mvMatrix, [-xPos, 0.0, -zPos]);
 
 //    genEnvMap();
 
@@ -1132,7 +1139,7 @@ function drawScene() {
 //
     if(isNoiseShader == 0){
         drawSkyBox();
-        drawPlaneWater2();
+        drawPlaneWater();
         drawBumpWater();
 
 
@@ -1352,18 +1359,22 @@ function setBumpUniforms(){
     setNormalMatrix(bumpShaderProgram);
 
     gl.uniform3f(bumpShaderProgram.lightPosition, pointLight.direction[0], pointLight.direction[1], pointLight.direction[2]);
-    gl.uniform4f(bumpShaderProgram.ambientColor, 0.1, 0.1, 0.1, 1.0);
+    gl.uniform4f(bumpShaderProgram.ambientColor, 0.0, 0.0, 0.0, 0.1);
     gl.uniform4f(bumpShaderProgram.diffuseColor, 1.0, 250/255, 205/255, 1.0);
     gl.uniform4f(bumpShaderProgram.specularColor, 1.0, 250/255, 205/255, 1.0);
     gl.uniform1f(bumpShaderProgram.isEnvMap, isEnvMap);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.envTexture);
     gl.bindTexture(gl.TEXTURE_2D, envFBO.texture);
-    gl.uniform1i(bumpShaderProgram.colorMap, textureUnits.envTexture);
+    gl.uniform1i(bumpShaderProgram.envMap, textureUnits.envTexture);
 
-    gl.activeTexture(gl.TEXTURE0 + textureUnits.cubeTexture);
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
-    gl.uniform1i(bumpShaderProgram.cubeSamplerUniform, textureUnits.cubeTexture);
+    gl.activeTexture(gl.TEXTURE0 + textureUnits.waterTexture);
+    gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
+    gl.uniform1i(bumpShaderProgram.waterSampler, textureUnits.waterTexture);
+
+//    gl.activeTexture(gl.TEXTURE0 + textureUnits.cubeTexture);
+//    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
+//    gl.uniform1i(bumpShaderProgram.cubeSamplerUniform, textureUnits.cubeTexture);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.normalTexture);
     gl.bindTexture(gl.TEXTURE_2D, normalFBO.texture);
