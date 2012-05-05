@@ -86,7 +86,7 @@
     uniform mat3 uNMatrix;
 
     vec3 tangent = vec3(1.0, 0.0, 0.0);
-    vec3 normal = vec3(0.0, 1.0, 1.0);
+    vec3 normal = vec3(0.0, 0.0, 1.0);
 
     varying vec3 LightDir;
     varying vec3 EyeDir;
@@ -139,7 +139,7 @@
     void main(void)
     {
     //vec3 normal = texture2D( normalMap, vTexCoord).xyz;
-    vec3 normal = vec3(0.0, 1.0, 0.0);
+    vec3 normal = vec3(0.0, 0.0, 1.0);
     vec3 reflectDir = reflect(LightDir, normDelta);
 
     vec3 reflectionDir = reflect(viewInWorldSpace, normalize(normalInWorldSpace));
@@ -1029,9 +1029,7 @@ function genFBONormalMap(){
 
 function genFBOEnvMap(){
     gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO.framebuffer);
-    gl.enable(gl.SCISSOR_BOX);
-//    gl.enable(gl.SCISSOR_TEST);
-    gl.scissor(0.0, 0.0, gl.viewportWidth, gl.viewportHeight/4);
+    mat4.frustum(-2, 2, 2, 0, 1.0, 100000.0, pMatrix);
     gl.useProgram(cubeMapShaderProgram);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, skyBoxBuffer.vertexPositionBuffer);
@@ -1044,10 +1042,8 @@ function genFBOEnvMap(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyBoxBuffer.indexBuffer);
 
-    mvPushMatrix();
-    mat4.scale(mvMatrix, [1.0, -1.0, 1.0]);
     setMatrixUniforms(cubeMapShaderProgram);
-    mvPopMatrix();
+
     gl.drawElements(gl.TRIANGLES, skyBoxBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.envTexture);
@@ -1086,6 +1082,8 @@ var zPos = 0;
 var yawRate = 0;
 var speed = 0;
 
+
+
 function drawScene() {
 
     genFBONoiseMap();
@@ -1098,14 +1096,18 @@ function drawScene() {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    mat4.perspective(65, gl.viewportWidth / gl.viewportHeight, 1.0, 100000.0, pMatrix);
+//    mat4.perspective(65, gl.viewportWidth / gl.viewportHeight, 1.0, 100000.0, pMatrix);
+
+
+    genFBOEnvMap();
+
+    var asp = gl.viewportWidth/gl.viewportHeight;
+    mat4.frustum(-2, 2, -0.5, 2, 1.0, 100000.0, pMatrix);
 
     mat4.identity(mvMatrix);
     mat4.rotate(mvMatrix, degToRad(-yaw + 40), [0, 1, 0]);
 
     mat4.translate(mvMatrix, [-xPos, 0.0, -zPos]);
-
-    genFBOEnvMap();
 
 //    genEnvMap();
 
@@ -1123,7 +1125,7 @@ function drawScene() {
 //
     if(isNoiseShader == 0){
         drawSkyBox();
-        drawPlaneWater2();
+        drawPlaneWater();
         drawBumpWater();
 
 
@@ -1275,9 +1277,9 @@ function setRippleUniforms(){
     gl.uniform1i(rippleShaderProgram.cubeSamplerUniform, 1);
 
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
-    gl.uniform1i(rippleShaderProgram.samplerUniform, 0);
+    gl.activeTexture(gl.TEXTURE0 + textureUnits.envTexture);
+    gl.bindTexture(gl.TEXTURE_2D, envFBO.texture);
+    gl.uniform1i(rippleShaderProgram.samplerUniform, textureUnits.envTexture);
 
     gl.uniform2f(rippleShaderProgram.resolution, gl.viewportWidth, gl.viewportHeight);
     var time = (new Date()).getTime();
@@ -1345,9 +1347,9 @@ function setBumpUniforms(){
     gl.uniform4f(bumpShaderProgram.specularColor, 1.0, 250/255, 205/255, 1.0);
     gl.uniform1f(bumpShaderProgram.isEnvMap, isEnvMap);
 
-    gl.activeTexture(gl.TEXTURE0 + textureUnits.waterTexture);
-    gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
-    gl.uniform1i(bumpShaderProgram.colorMap, textureUnits.waterTexture);
+    gl.activeTexture(gl.TEXTURE0 + textureUnits.envTexture);
+    gl.bindTexture(gl.TEXTURE_2D, envFBO.texture);
+    gl.uniform1i(bumpShaderProgram.colorMap, textureUnits.envTexture);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.cubeTexture);
     gl.bindTexture(gl.TEXTURE_2D, cubeTexture);
