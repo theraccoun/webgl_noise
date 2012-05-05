@@ -319,7 +319,8 @@
 
     uniform float time;
     uniform vec2 resolution;
-    uniform sampler2D tex;
+    uniform sampler2D waterSampler;
+    uniform sampler2D envMap;
     uniform samplerCube cubeMap;
     uniform float isEnvMap;
 
@@ -328,20 +329,23 @@
     varying vec3 reflectInWorldCoordinates;
 
     void main(void) {
+
     vec2 cPos = vTexCoord*2.0 - 1.0;
     float cLength = length(cPos);
 
     vec2 uv = vTexCoord +(cPos/cLength)*cos(cLength*12.0-time*4.0)*0.03;
-    vec3 col = texture2D(tex,uv).xyz;
+    vec3 waterCol = texture2D(waterSampler, uv).xyz;
+    vec3 envCol = texture2D(envMap, uv).xyz;
+    vec3 mixCol = mix(waterCol, envCol, 0.7);
     //vec3 rippleCol = col.rgb;
 
     if(isEnvMap == 1.0){
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(waterCol, 1.0);
     }
     else{
-    vec3 envColor = textureCube(cubeMap, reflectInWorldCoordinates).xyz;
-    vec3 mixColor = mix(envColor, col, 0.50);
-    gl_FragColor = vec4(mixColor, 1.0);
+    //vec3 envColor = textureCube(cubeMap, reflectInWorldCoordinates).xyz;
+    //vec3 mixColor = mix(envColor, col, 0.50);
+    gl_FragColor = vec4(mixCol, 1.0);
     }
     }
 </script>
@@ -708,7 +712,10 @@ function initShaders() {
     rippleShaderProgram.nMatrixUniform = gl.getUniformLocation(rippleShaderProgram, "uNMatrix");
     rippleShaderProgram.inverseMVUnivorm = gl.getUniformLocation(rippleShaderProgram, "uInverseMV");
     rippleShaderProgram.cubeSamplerUniform = gl.getUniformLocation(rippleShaderProgram, "cubeMap");
+    rippleShaderProgram.waterSampler = gl.getUniformLocation(rippleShaderProgram, "waterSampler");
+    rippleShaderProgram.envSampler = gl.getUniformLocation(rippleShaderProgram, "envMap");
     rippleShaderProgram.isEnvMap = gl.getUniformLocation(rippleShaderProgram, "isEnvMap");
+
 
     var fragmentShader = getShader(gl, "swirlShader-fs");
     var vertexShader = getShader(gl, "swirlShader-vs");
@@ -1125,7 +1132,7 @@ function drawScene() {
 //
     if(isNoiseShader == 0){
         drawSkyBox();
-        drawPlaneWater();
+        drawPlaneWater2();
         drawBumpWater();
 
 
@@ -1170,12 +1177,12 @@ function drawPlaneWater(){
     gl.useProgram(rippleShaderProgram);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, planeBuffer.vertexPositionBuffer);
-    gl.vertexAttribPointer(swirlShaderProg.vertexPositionAttribute, planeBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(swirlShaderProg.vertexPositionAttribute);
+    gl.vertexAttribPointer(rippleShaderProgram.vertexPositionAttribute, planeBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(rippleShaderProgram.vertexPositionAttribute);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, planeBuffer.textureCoordBuffer);
-    gl.vertexAttribPointer(swirlShaderProg.textureCoordAttribute, planeBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(swirlShaderProg.textureCoordAttribute);
+    gl.vertexAttribPointer(rippleShaderProgram.textureCoordAttribute, planeBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(rippleShaderProgram.textureCoordAttribute);
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     mvPushMatrix();
@@ -1272,14 +1279,17 @@ function setRippleUniforms(){
     setMatrixUniforms(rippleShaderProgram);
 
 
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
-    gl.uniform1i(rippleShaderProgram.cubeSamplerUniform, 1);
-
+//    gl.activeTexture(gl.TEXTURE0 + textureUnits.cubeTexture);
+//    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
+//    gl.uniform1i(rippleShaderProgram.cubeSamplerUniform, textureUnits.cubeTexture);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.envTexture);
     gl.bindTexture(gl.TEXTURE_2D, envFBO.texture);
-    gl.uniform1i(rippleShaderProgram.samplerUniform, textureUnits.envTexture);
+    gl.uniform1i(rippleShaderProgram.envSampler, textureUnits.envTexture);
+
+    gl.activeTexture(gl.TEXTURE0 + textureUnits.waterTexture);
+    gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
+    gl.uniform1i(rippleShaderProgram.waterSampler, textureUnits.waterTexture);
 
     gl.uniform2f(rippleShaderProgram.resolution, gl.viewportWidth, gl.viewportHeight);
     var time = (new Date()).getTime();
@@ -1352,7 +1362,7 @@ function setBumpUniforms(){
     gl.uniform1i(bumpShaderProgram.colorMap, textureUnits.envTexture);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.cubeTexture);
-    gl.bindTexture(gl.TEXTURE_2D, cubeTexture);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
     gl.uniform1i(bumpShaderProgram.cubeSamplerUniform, textureUnits.cubeTexture);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.normalTexture);
