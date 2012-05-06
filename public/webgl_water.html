@@ -345,8 +345,8 @@
     vec2 cPos2 = vTexCoord*2.0 - 1.0 + 0.3;
     float cLength2 = length(cPos2);
 
-    vec2 uv1 = vTexCoord +(cPos1/cLength1)*cos(cLength1*12.0-time*4.0)*0.03;
-    vec2 uv2 = vTexCoord +(cPos2/cLength2)*cos(cLength2*5.0-time*4.0)*0.03;
+    vec2 uv1 = vTexCoord +(cPos1/cLength1)*cos(cLength1*8.0-time*4.0)*0.03;
+    vec2 uv2 = vTexCoord +(cPos2/cLength2)*cos(cLength2*5.0-time*3.0)*0.03;
     vec3 waterCol1 = texture2D(waterSampler, uv1).xyz;
    vec3 waterCol2 = texture2D(waterSampler, uv2+uv1).xyz;
     //vec3 waterCol = waterCol1 + waterCol2;
@@ -1123,7 +1123,7 @@ function drawScene() {
 
 //    mat4.perspective(65, gl.viewportWidth / gl.viewportHeight, 1.0, 100000.0, pMatrix);
     mat4.identity(mvMatrix);
-    mat4.rotate(mvMatrix, degToRad(-yaw + 70), [0, 1, 0]);
+    mat4.rotate(mvMatrix, degToRad(-yaw + 85), [0, 1, 0]);
 
     mat4.translate(mvMatrix, [-xPos, -90.0, -zPos - 30]);
 
@@ -1739,6 +1739,12 @@ function changeSkyBox(){
 <button onclick="addEnvMap()">Add/Remove EnvMap</button>
 <\b><\b>
 <button onclick="changeSkyBox()">Change Skybox</button>
+
+<font color="red">
+<p><em>Small rectangles represent examples of the shader applied over a smaller distance, with dimmed coloring to highlight the bump/noise patterns</em></p>
+<p><big>Use the right and left arrow keys to rotate looking around the scene</big></p>
+<p><big>Use r to rotate the example shader</big></p>
+</font>
 
 </body>
 
