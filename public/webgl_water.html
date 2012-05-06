@@ -199,6 +199,7 @@
     uniform sampler2D normalMap;
     uniform samplerCube cubeMap;
     uniform float isEnvMap;
+    uniform float isDrawExample;
 
 
     varying vec3 vVaryingNormal;
@@ -216,7 +217,16 @@
 
     //Blend the water texture with the envMap, then mix this with the diffuse intensity
     vec3 waterCol = texture2D(waterTexture, vTexCoords).rgb;
-    vec3 envCol = texture2D(envMap, vTexCoords).rgb;
+
+    vec3 envCol;
+    vec3 vReflection        = normalize(reflect(-normalize(normalAdjusted), normalize(vVaryingLightDir)));
+    if(isDrawExample == 1.0){
+        envCol = textureCube(cubeMap , vReflection).xyz;
+    }
+    else{
+        envCol = texture2D(envMap, vTexCoords).rgb;
+    }
+
     vec3 mixCol = mix(waterCol, envCol, 0.8);
 
     // Combine blend with diffuse lighting
@@ -231,9 +241,8 @@
     // Set the almost final output color as a vec4 - only specular to go!
     vec4 vFragColor = vec4(color, 1.0);
 
-    // Calc and apply specular contribution
-    vec3 vReflection        = normalize(reflect(-normalize(normalAdjusted), normalize(vVaryingLightDir)));
-
+    // Add in specular
+    vFragColor = vec4(color, 1.0);
     float specularIntensity = max(0.0, dot(normalize(normalAdjusted), vReflection));
 
     // If the diffuse light intensity is over a given value, then add the specular component
@@ -333,7 +342,7 @@
 
     vec2 cPos1 = vTexCoord*2.0 - 1.0 - 0.5;
     float cLength1 = length(cPos1);
-    vec2 cPos2 = vTexCoord*2.0 - 1.0 + 0.5;
+    vec2 cPos2 = vTexCoord*2.0 - 1.0 + 0.3;
     float cLength2 = length(cPos2);
 
     vec2 uv1 = vTexCoord +(cPos1/cLength1)*cos(cLength1*12.0-time*4.0)*0.03;
@@ -341,7 +350,7 @@
     vec3 waterCol1 = texture2D(waterSampler, uv1).xyz;
    vec3 waterCol2 = texture2D(waterSampler, uv2+uv1).xyz;
     //vec3 waterCol = waterCol1 + waterCol2;
-    vec3 envCol = texture2D(envMap, uv1).xyz;
+    vec3 envCol = texture2D(envMap, vTexCoord).xyz;
     vec3 mixCol = mix(waterCol2, envCol, 0.7);
     //vec3 rippleCol = col.rgb;
 
@@ -865,6 +874,7 @@ function initShaders() {
     bumpShaderProgram.normalMap = gl.getUniformLocation(bumpShaderProgram, "normalMap");
     bumpShaderProgram.cubeSamplerUniform = gl.getUniformLocation(bumpShaderProgram, "cubeMap");
     bumpShaderProgram.isEnvMap = gl.getUniformLocation(bumpShaderProgram, "isEnvMap");
+    bumpShaderProgram.isDrawExample = gl.getUniformLocation(bumpShaderProgram, "isDrawExample");
 
     gl.useProgram(null);
 
@@ -919,9 +929,9 @@ function initDrawingBuffers() {
     triangleVertexPositionBuffer.numItems = 3;
 
     unitSquareBuffer = createRectangleBuffer(1, 1);
-    poolBuffer = createRectangleBuffer(40, 30);
+    poolBuffer = createRectangleBuffer(120, 90);
     planeBuffer = createRectangleBuffer(1, 1);
-    noiseWaterBuffer = createRectangleBuffer(120, 120);
+    noiseWaterBuffer = createRectangleBuffer(140, 80);
     skyBoxBuffer2 = createRectangleBuffer(800, 800);
     skyBoxBuffer = createCubeBuffer(80);
 
@@ -932,14 +942,14 @@ var noiseFBO;
 var normalFBO;
 var envFBO;
 
-function initTextureFrameBuffer( width, height){
+function initTextureFrameBuffer( w, h, textureIndex){
 
-    var fbo = {framebuffer : null , texture : null, size : width};
+    var fbo = {framebuffer : null , texture : null, width : null, height : null};
 
     fbo.framebuffer = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.framebuffer);
-    fbo.framebuffer.width = width;
-    fbo.framebuffer.height = width;
+    fbo.framebuffer.width = w;
+    fbo.framebuffer.height = h;
 
     fbo.texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
@@ -967,7 +977,7 @@ function genFBONoiseMap(){
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, noiseFBO.framebuffer);
 
-    gl.viewport(0, 0, 512, 512);
+    gl.viewport(0, 0, 1024, 512);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     mat4.identity(pMatrix);
@@ -1004,7 +1014,7 @@ function genFBONormalMap(){
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, normalFBO.framebuffer);
 
-    gl.viewport(0, 0, 512, 512);
+    gl.viewport(0, 0, 1024, 512);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     mat4.identity(pMatrix);
@@ -1043,21 +1053,22 @@ function genFBONormalMap(){
 
 function genFBOEnvMap(){
     gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO.framebuffer);
+
+
     mat4.frustum(-2, 2, 2, 0, 1.0, 100000.0, pMatrix);
+
     gl.useProgram(cubeMapShaderProgram);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, skyBoxBuffer.vertexPositionBuffer);
     gl.vertexAttribPointer(cubeMapShaderProgram.vertexPositionAttribute, skyBoxBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(cubeMapShaderProgram.vertexPositionAttribute);
 
-    gl.activeTexture(gl.TEXTURE1);
+    gl.activeTexture(gl.TEXTURE0 + textureUnits.cubeTexture);
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
-    gl.uniform1i(cubeMapShaderProgram.cubeSamplerUniform, 1);
+    gl.uniform1i(cubeMapShaderProgram.cubeSamplerUniform, textureUnits.cubeTexture);
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyBoxBuffer.indexBuffer);
-
     setMatrixUniforms(cubeMapShaderProgram);
-
     gl.drawElements(gl.TRIANGLES, skyBoxBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.envTexture);
@@ -1078,7 +1089,7 @@ function setupLighting(){
     directionalLight.direction = [0.0, 3.0, 0.0];
     directionalLight.color = [1.0, 0.0, 0.0];
 
-    pointLight.direction = [-10.0, 300.0, -300.0];
+    pointLight.direction = [-10.0, 150.0, 150.0];
 
     ambientLight.color = [1.0, 1.0, 1.0, 0.3];
 }
@@ -1112,17 +1123,18 @@ function drawScene() {
 
 //    mat4.perspective(65, gl.viewportWidth / gl.viewportHeight, 1.0, 100000.0, pMatrix);
     mat4.identity(mvMatrix);
-    mat4.rotate(mvMatrix, degToRad(-yaw + 40), [0, 1, 0]);
+    mat4.rotate(mvMatrix, degToRad(-yaw + 70), [0, 1, 0]);
 
-    mat4.translate(mvMatrix, [-xPos, 0.0, -zPos]);
+    mat4.translate(mvMatrix, [-xPos, -90.0, -zPos - 30]);
+
 
     genFBOEnvMap();
+
 
     var asp = gl.viewportWidth/gl.viewportHeight;
     mat4.frustum(-2, 2, -0.5, 2, 1.0, 100000.0, pMatrix);
 
-
-
+//    drawSimple();
 //    genEnvMap();
 
 //    mvPushMatrix();
@@ -1139,7 +1151,7 @@ function drawScene() {
 //
     if(isNoiseShader == 0){
         drawSkyBox();
-        drawPlaneWater();
+        drawPlaneWater2();
         drawBumpWater();
 
 
@@ -1148,16 +1160,40 @@ function drawScene() {
         drawNoiseWater();
     }
     else if(isNoiseShader == 2){
-//        drawPlaneWater();
 //        drawSkyBox();
+        isEnvMap = 1;
+        drawPlaneWater();
         drawRippleWater();
 //        drawBumpWater();
 
-    }
-    else{
+    }else{
         drawBumpWater();
     }
 
+}
+
+function drawSimple(){
+     gl.useProgram(basicShaderProgram);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, poolBuffer.vertexPositionBuffer);
+    gl.vertexAttribPointer(basicShaderProgram.vertexPositionAttribute, poolBuffer.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(basicShaderProgram.vertexPositionAttribute);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, poolBuffer.textureCoordBuffer);
+    gl.vertexAttribPointer(basicShaderProgram.textureCoordAttribute, poolBuffer.textureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(basicShaderProgram.textureCoordAttribute);
+
+    gl.activeTexture(gl.TEXTURE0 + textureUnits.envTexture);
+    gl.bindTexture(gl.TEXTURE_2D, envFBO.texture);
+    gl.uniform1i(basicShaderProgram.samplerUniform, textureUnits.envTexture);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
+    mvPushMatrix();
+    mat4.translate(mvMatrix, [xPos + 90.0, -5.0, -150.0 + zPos]);
+    mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
+    setMatrixUniforms(basicShaderProgram);
+    mvPopMatrix();
+    gl.drawElements(gl.TRIANGLES, poolBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 }
 
 function createSpecularMap(){
@@ -1217,13 +1253,14 @@ function drawPlaneWater2(){
     mat4.translate(mvMatrix, [0.0, -200.0, 0.0]);
     mat4.rotate(mvMatrix, Math.PI/2, [-1.0, 0.0, 0.0]);
     mat4.scale(mvMatrix, [8000, 8000, 1]);
+    gl.uniform1f(bumpShaderProgram.isDrawExample, 0.0);
     setBumpUniforms();
     mvPopMatrix();
     gl.drawElements(gl.TRIANGLES, planeBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
     mvPushMatrix();
 //    mat4.identity(mvMatrix);
-    mat4.translate(mvMatrix, [100, 3.0, 35.0]);
+    mat4.translate(mvMatrix, pointLight.direction);
     drawSphere();
     mvPopMatrix();
 }
@@ -1319,7 +1356,7 @@ function drawRippleWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     mvPushMatrix();
-    mat4.translate(mvMatrix, [xPos + 90.0, -5.0, -150.0 + zPos]);
+    mat4.translate(mvMatrix, [xPos + 90.0, 50.0, -150.0 + zPos]);
     mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
     setRippleUniforms();
     mvPopMatrix();
@@ -1340,17 +1377,18 @@ function drawBumpWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, poolBuffer.indexBuffer);
     mvPushMatrix();
-    mat4.translate(mvMatrix, [xPos + 90.0, -5.0, -150.0 + zPos]);
+    mat4.translate(mvMatrix, [90.0, 70.0, -100.0]);
     mat4.rotate(mvMatrix, rotatePond, [-1.0, 0.0, 0.0]);
+    gl.uniform1f(bumpShaderProgram.isDrawExample, 1.0);
     setBumpUniforms();
     mvPopMatrix();
     gl.drawElements(gl.TRIANGLES, poolBuffer.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
-    mvPushMatrix();
-    mat4.identity(mvMatrix);
-    mat4.translate(mvMatrix, pointLight.direction);
-    drawSphere();
-    mvPopMatrix();
+//    mvPushMatrix();
+////    mat4.identity(mvMatrix);
+//    mat4.translate(mvMatrix, pointLight.direction);
+//    drawSphere();
+//    mvPopMatrix();
 }
 
 function setBumpUniforms(){
@@ -1372,9 +1410,9 @@ function setBumpUniforms(){
     gl.bindTexture(gl.TEXTURE_2D, waterTextureImg);
     gl.uniform1i(bumpShaderProgram.waterSampler, textureUnits.waterTexture);
 
-//    gl.activeTexture(gl.TEXTURE0 + textureUnits.cubeTexture);
-//    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
-//    gl.uniform1i(bumpShaderProgram.cubeSamplerUniform, textureUnits.cubeTexture);
+    gl.activeTexture(gl.TEXTURE0 + textureUnits.cubeTexture);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
+    gl.uniform1i(bumpShaderProgram.cubeSamplerUniform, textureUnits.cubeTexture);
 
     gl.activeTexture(gl.TEXTURE0 + textureUnits.normalTexture);
     gl.bindTexture(gl.TEXTURE_2D, normalFBO.texture);
@@ -1417,8 +1455,8 @@ function drawNoiseWater(){
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, noiseWaterBuffer.indexBuffer);
     mvPushMatrix();
-    mat4.translate(mvMatrix, [xPos + 60, -5.0, -200.0 + zPos]);
-    mat4.rotate(mvMatrix, rotatePond + Math.PI/3, [-1.0, 0.0, 0.0]);
+    mat4.translate(mvMatrix, [80, 150.0, -180.0]);
+    mat4.rotate(mvMatrix, rotatePond + Math.PI/4, [-1.0, 0.0, 0.0]);
     setNormalMatrix(swirlShaderProg);
     setMatrixUniforms(swirlShaderProg);
     mvPopMatrix();
@@ -1643,9 +1681,9 @@ function webGLStart() {
     initGL(canvas);
     initShaders();
     rotatePond = 0;
-    noiseFBO = initTextureFrameBuffer(512);
-    normalFBO = initTextureFrameBuffer(512);
-    envFBO = initTextureFrameBuffer(512);
+    noiseFBO = initTextureFrameBuffer(1024, 512, textureUnits.noiseTexture);
+    normalFBO = initTextureFrameBuffer(1024, 512, textureUnits.normalTexture);
+    envFBO = initTextureFrameBuffer(1024, 512, textureUnits.envTexture);
     initDrawingBuffers();
     initTextures();
     setupLighting();
@@ -1669,6 +1707,7 @@ var isNoiseShader = 0;
 function changeShader(){
     isNoiseShader = (isNoiseShader + 1)%4;
     skyBoxNum = isNoiseShader;
+    yaw = 0;
     webGLStart();
 }
 
